@@ -31,8 +31,8 @@ Gui, Add, Text, vIconInDB x20 y220 w100 h20, Checking...
 
 ; Icon Preview section
 Gui, Add, GroupBox, x10 y250 w240 h150, Current Icon Preview
-Gui, Add, Picture, vCurrentIcon x20 y270 w320 h176,
-Gui, Add, Text, vIconStatus x20 y340 w200 h20, No icon loaded
+Gui, Add, Picture, vCurrentIcon x20 y270 w220 h100,
+Gui, Add, Text, vIconStatus x20 y375 w200 h20, No icon loaded
 
 ; Icon Actions section
 Gui, Add, GroupBox, x260 y250 w230 h150, Icon Actions
@@ -84,8 +84,6 @@ SearchGames:
     statusText := "Found " . result.RowCount . " games. Select one from the dropdown."
     GuiControl,, StatusText, %statusText%
 return
-
-
 
 GameSelected:
     Gui, Submit, NoHide
@@ -168,9 +166,7 @@ GameSelected:
     }
 
     GuiControl,, StatusText, Game selected: %CurrentGameTitle%
-
 return
-
 
 CleanupPreview:
     Loop, Files, %A_Temp%\preview_icon_*.png
@@ -178,7 +174,6 @@ CleanupPreview:
         FileDelete, %A_LoopFileFullPath%
     }
 return
-
 
 SaveExistingIcon:
     if (CurrentGameId = "") {
@@ -200,7 +195,6 @@ SaveExistingIcon:
     ; Read file and save to database
     SaveIconToDatabase(CurrentIconPath, CurrentGameId, CurrentGameTitle)
 return
-
 
 BrowseAndSaveIcon:
     if (CurrentGameId = "") {
@@ -225,11 +219,10 @@ BrowseAndSaveIcon:
     SaveIconToDatabase(selectedIcon, CurrentGameId, CurrentGameTitle)
 return
 
-
 SaveIconToDatabase(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon to database...
 
-    ; Check file size (optional - warn if very large)
+    ; Check file size
     FileGetSize, fileSize, %iconPath%
     if (fileSize > 500000) {  ; 500KB
         MsgBox, 4, Large File, Warning: This file is quite large (%fileSize% bytes).`nContinue anyway?
@@ -237,7 +230,7 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
             return
     }
 
-    ; Read file into memory
+    ; Read file data
     file := FileOpen(iconPath, "r")
     if (!file) {
         GuiControl,, StatusText, Error: Could not open file
@@ -245,7 +238,6 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
         return
     }
 
-    ; Read file data
     fileLength := file.Length
     VarSetCapacity(iconData, fileLength)
     bytesRead := file.RawRead(iconData, fileLength)
@@ -257,13 +249,14 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
         return
     }
 
-    ; Create BLOB array for SQLite
-    blobArray := []
-    blobArray[1] := {Addr: &iconData, Size: bytesRead}
-
-    ; Update database with BLOB - fixed StrReplace for AHK v1
+    ; Prepare SQL
     StringReplace, escapedGameId, gameId, ', '', All
     updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
+
+    ; Create BLOB array in the correct format for your SQLiteDB class
+    ; The StoreBLOB method expects: Blob.Addr and Blob.Size
+    blobArray := []
+    blobArray[1] := {Addr: &iconData, Size: bytesRead}
 
     if (db.StoreBLOB(updateSql, blobArray)) {
         statusText := "Success: Icon saved to database (" . bytesRead . " bytes)"
@@ -278,13 +271,15 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
 
         MsgBox, 64, Success, Icon successfully saved to database!
 
+        ; Refresh display
+        Gosub, GameSelected
+
     } else {
         errMsg := db.ErrorMsg
         GuiControl,, StatusText, Error: Failed to save icon to database
         MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%
     }
 }
-
 
 DeleteIcon:
     if (CurrentGameId = "") {
@@ -324,12 +319,11 @@ DeleteIcon:
     }
 return
 
-db.CloseDB()
-
 GuiClose:
     ; Cleanup any temp files
     Loop, Files, %A_Temp%\preview_icon_*.png
     {
         FileDelete, %A_LoopFileFullPath%
     }
+    db.CloseDB()
 ExitApp
