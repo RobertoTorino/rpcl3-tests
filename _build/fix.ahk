@@ -253,64 +253,13 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
     StringReplace, escapedGameId, gameId, ', '', All
     updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
 
-    ; Try multiple BLOB formats
-    success := false
-    method := ""
+    ; Create BLOB array in the correct format for your SQLiteDB class
+    ; The StoreBLOB method expects: Blob.Addr and Blob.Size
+    blobArray := []
+    blobArray[1] := {Addr: &iconData, Size: bytesRead}
 
-    ; Method 1: Standard format with address and size
-    blobArray1 := [{Addr: &iconData, Size: bytesRead}]
-    if (db.StoreBLOB(updateSql, blobArray1)) {
-        success := true
-        method := "Address/Size format"
-    }
-
-    if (!success) {
-        ; Method 2: Just the raw data
-        blobArray2 := [iconData]
-        if (db.StoreBLOB(updateSql, blobArray2)) {
-            success := true
-            method := "Raw data format"
-        }
-    }
-
-    if (!success) {
-        ; Method 3: Different property names
-        blobArray3 := [{Data: iconData, Length: bytesRead}]
-        if (db.StoreBLOB(updateSql, blobArray3)) {
-            success := true
-            method := "Data/Length format"
-        }
-    }
-
-    if (!success) {
-        ; Method 4: Try with Buffer property
-        blobArray4 := [{Buffer: &iconData, Size: bytesRead}]
-        if (db.StoreBLOB(updateSql, blobArray4)) {
-            success := true
-            method := "Buffer format"
-        }
-    }
-
-    if (!success) {
-        ; Method 5: Try array of arrays
-        blobArray5 := [[&iconData, bytesRead]]
-        if (db.StoreBLOB(updateSql, blobArray5)) {
-            success := true
-            method := "Array of arrays format"
-        }
-    }
-
-    if (!success) {
-        ; Method 6: Try object with different structure
-        blobArray6 := [{Ptr: &iconData, Len: bytesRead}]
-        if (db.StoreBLOB(updateSql, blobArray6)) {
-            success := true
-            method := "Ptr/Len format"
-        }
-    }
-
-    if (success) {
-        statusText := "Success: Icon saved (" . bytesRead . " bytes) using " . method
+    if (db.StoreBLOB(updateSql, blobArray)) {
+        statusText := "Success: Icon saved to database (" . bytesRead . " bytes)"
         GuiControl,, StatusText, %statusText%
 
         iconText := "Yes (Size: " . bytesRead . " bytes)"
@@ -320,15 +269,15 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
         GuiControl,, CurrentIcon, %iconPath%
         GuiControl,, IconStatus, Saved to database
 
-        MsgBox, 64, Success, Icon successfully saved to database using %method%!
+        MsgBox, 64, Success, Icon successfully saved to database!
 
         ; Refresh display
         Gosub, GameSelected
 
     } else {
         errMsg := db.ErrorMsg
-        GuiControl,, StatusText, Error: All BLOB methods failed
-        MsgBox, 16, Database Error, None of the BLOB methods worked:`n%errMsg%`n`nYou may need to change the column type to TEXT for Base64 storage.
+        GuiControl,, StatusText, Error: Failed to save icon to database
+        MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%
     }
 }
 
