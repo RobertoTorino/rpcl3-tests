@@ -1,64 +1,28 @@
-Step 1: Add the "Have" Column to Your Database
-First, you'll need to add the "Have" column to your existing database. You can do this by running this SQL command once (you can add it temporarily to your script or use a database management tool):
+Step 1: Add Global Array for Have Status
+Add this to your global array declarations at the top:
 
-; Add this near the top of your script, after the database connection - run once to add the column
-sql := "ALTER TABLE games ADD COLUMN Have INTEGER DEFAULT 0"
-if !db.Exec(sql) {
-    ; Column might already exist, ignore error
-}
-Step 2: Modify the Quick Access Buttons Section
-Replace this section in your GUI:
+; Global array declarations - ADD THIS SECTION
+Global G_GameIds := []
+Global G_GameTitles := []
+Global G_EbootPaths := []
+Global G_IconPaths := []
+Global G_PicPaths := []
+Global G_FavoriteStatus := []
+Global G_HaveStatus := []  ; ADD THIS LINE
+Global CurrentSelectedRow := 0
+Step 2: Update Action Buttons Section
+Replace your action buttons section with this (adds the Toggle Have button):
 
-; Quick access buttons section
-Gui, Add, GroupBox, x10 y10 w380 h60, Quick Access
-Gui, Add, Button, gShowAll x20 y30 w60 h20, Show All
-Gui, Add, Button, gShowFavorites x85 y30 w60 h20, Favorites
-Gui, Add, Button, gShowPlayed x150 y30 w50 h20, Played
-Gui, Add, Button, gShowPSN x205 y30 w40 h20, PSN
-Gui, Add, Button, gShowArcade x250 y30 w50 h20, Arcade
-With this (to make room for the "Have" button):
+; Action buttons
+Gui, Add, Button, gToggleFavorite x95 y450 w80 h25, Toggle Favorite
+Gui, Add, Button, gToggleHave x180 y450 w80 h25, Toggle Have
+Gui, Add, Button, gLaunchGame x270 y420 w80 h30, Launch
+Gui, Add, Button, gClearSearch x270 y450 w80 h30, Clear
+Step 3: Update All SQL Queries to Include Have Column
+Update all your "Show" functions to include the Have column:
 
-; Quick access buttons section
-Gui, Add, GroupBox, x10 y10 w380 h80, Quick Access
-Gui, Add, Button, gShowAll x20 y30 w60 h20, Show All
-Gui, Add, Button, gShowFavorites x85 y30 w60 h20, Favorites
-Gui, Add, Button, gShowPlayed x150 y30 w50 h20, Played
-Gui, Add, Button, gShowPSN x205 y30 w40 h20, PSN
-Gui, Add, Button, gShowArcade x250 y30 w50 h20, Arcade
-Gui, Add, Button, gShowHave x320 y30 w40 h20, Have
-Step 3: Adjust Other GUI Elements
-Since the Quick Access section is now taller, adjust the Y positions of elements below it:
-
-; Search section - change y80 to y100
-Gui, Add, GroupBox, x10 y100 w380 h60, Search
-Gui, Add, Text, x20 y120, Game title or ID:
-Gui, Add, Edit, vSearchTerm x120 y117 w180 h20
-Gui, Add, Button, gSearch x310 y117 w70 h23, Search
-
-; Results section - change y150 to y170
-Gui, Add, GroupBox, x10 y170 w380 h220, Results
-Gui, Add, ListView, vResultsList x20 y190 w360 h170 Grid -Multi AltSubmit gListViewClick, *|Game ID|Title
-
-; Update the total games counter position
-Gui, Add, Text, vTotalGamesCounter x310 y52 w70 h16 +Right, Total: 0
-
-; Image preview section - change y380 to y400
-Gui, Add, GroupBox, x10 y400 w380 h100, Game Preview
-Gui, Add, Picture, vGameIcon x20 y420 w64 h64 gShowLargeImage,
-Gui, Add, Text, vImageStatus x95 y420, Select a game to see its icon
-
-; Action buttons - change y positions accordingly
-Gui, Add, Button, gToggleFavorite x95 y450 w90 h25, Toggle Favorite
-Gui, Add, Button, gLaunchGame x200 y420 w80 h30, Launch
-Gui, Add, Button, gClearSearch x290 y420 w80 h30, Clear
-
-; Adjust main window height
-Gui, Show, w400 h520, Game Search Launcher
-Step 4: Add the ShowHave Function
-Add this function after your other "Show" functions:
-
-ShowHave:
-    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games WHERE Have = 1 ORDER BY GameTitle LIMIT 50"
+ShowAll:
+    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games ORDER BY GameTitle LIMIT 50"
 
     if !db.GetTable(sql, result) {
         MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
@@ -67,39 +31,244 @@ ShowHave:
 
     PopulateResults(result)
 return
-Step 5: Update SQL Queries to Include Have Column (Optional)
-If you want to store and display the "Have" status in your arrays (similar to favorites), you can modify your queries to include the Have column. For example, in your search function:
 
-sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games " . whereClause . " ORDER BY GameTitle LIMIT 50"
-And add a global array for Have status:
+ShowFavorites:
+    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE Favorite = 1 ORDER BY GameTitle LIMIT 50"
 
-Global G_HaveStatus := []
-Then in your PopulateResults function, you would store and handle the Have status similar to how you handle favorites.
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
+        return
+    }
 
-Step 6: Add the Database Column (One-time Setup)
-Add this code temporarily at the beginning of your script (after the database connection) to add the column if it doesn't exist:
+    PopulateResults(result)
+return
 
-; One-time database update - add Have column
-sql := "PRAGMA table_info(games)"
-if db.GetTable(sql, tableInfo) {
-    hasHaveColumn := false
-    Loop, % tableInfo.RowCount {
+ShowPlayed:
+    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE Played = 1 ORDER BY GameTitle LIMIT 50"
+
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
+        return
+    }
+
+    PopulateResults(result)
+return
+
+ShowPSN:
+    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE PSN = 1 ORDER BY GameTitle LIMIT 50"
+
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
+        return
+    }
+
+    PopulateResults(result)
+return
+
+ShowArcade:
+    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE ArcadeGame = 1 ORDER BY GameTitle LIMIT 50"
+
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
+        return
+    }
+
+    PopulateResults(result)
+return
+
+ShowHave:
+    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE Have = 1 ORDER BY GameTitle LIMIT 50"
+
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
+        return
+    }
+
+    PopulateResults(result)
+return
+Step 4: Update Search Function
+Search:
+    Gui, Submit, NoHide
+
+    searchTerm := Trim(SearchTerm)
+    if (searchTerm = "") {
+        MsgBox, 48, Input Required, Please enter a search term.
+        return
+    }
+
+    StringReplace, escapedTerm, searchTerm, ', '', All
+    whereClause := "WHERE (GameTitle LIKE '%" . escapedTerm . "%' OR GameId LIKE '%" . escapedTerm . "%')"
+
+    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games " . whereClause . " ORDER BY GameTitle LIMIT 50"
+
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
+        return
+    }
+
+    PopulateResults(result)
+return
+Step 5: Update PopulateResults Function
+Replace your PopulateResults function with this updated version:
+
+PopulateResults(result) {
+    ; Make sure we're working with global arrays
+    Global G_GameIds, G_GameTitles, G_EbootPaths, G_IconPaths, G_PicPaths, G_FavoriteStatus, G_HaveStatus
+
+    ; Clear ListView
+    LV_Delete()
+
+    ; Extract result row count first
+    resultRowCount := result.RowCount
+
+    if (resultRowCount = 0) {
+        LV_Add("", "", "No results found", "")
+        ; Update counter to show 0 games
+        GuiControl,, GameCounter, Games: 0
+        ClearImagePreview()
+        return
+    }
+
+    ; Clear and reinitialize arrays
+    G_GameIds := []
+    G_GameTitles := []
+    G_EbootPaths := []
+    G_IconPaths := []
+    G_PicPaths := []
+    G_FavoriteStatus := []
+    G_HaveStatus := []
+
+    ; Add results to ListView and store data
+    Loop, %resultRowCount% {
         row := ""
-        if tableInfo.GetRow(A_Index, row) {
-            if (row[2] = "Have") {
-                hasHaveColumn := true
-                break
+        if result.GetRow(A_Index, row) {
+            ; Store data in arrays (1-based indexing)
+            G_GameIds[A_Index] := row[1]
+            G_GameTitles[A_Index] := row[2]
+            G_EbootPaths[A_Index] := row[3]
+            G_FavoriteStatus[A_Index] := row[6]
+            G_HaveStatus[A_Index] := row[7]  ; ADD THIS LINE
+
+            ; Construct full paths
+            rawIconPath := row[4]
+            rawPicPath := row[5]
+
+            if (rawIconPath != "") {
+                cleanIconPath := LTrim(rawIconPath, "\/")
+                G_IconPaths[A_Index] := A_ScriptDir . "\" . cleanIconPath
+            } else {
+                G_IconPaths[A_Index] := ""
             }
+
+            if (rawPicPath != "") {
+                cleanPicPath := LTrim(rawPicPath, "\/")
+                G_PicPaths[A_Index] := A_ScriptDir . "\" . cleanPicPath
+            } else {
+                G_PicPaths[A_Index] := ""
+            }
+
+            ; Add row to ListView
+            favoriteIcon := (row[6] = 1) ? "*" : ""
+            LV_Add("", favoriteIcon, row[1], row[2])
         }
     }
 
-    if (!hasHaveColumn) {
-        sql := "ALTER TABLE games ADD COLUMN Have INTEGER DEFAULT 0"
-        if !db.Exec(sql) {
-            MsgBox, 16, Database Error, Failed to add Have column
-        }
+    ; Update game counter display
+    gameCount := G_GameIds.MaxIndex()
+    if (gameCount = "") {
+        gameCount := 0
+    }
+    GuiControl,, GameCounter, Games: %gameCount%
+
+    ; Auto-resize columns
+    LV_ModifyCol(1, 25)
+    LV_ModifyCol(2, "AutoHdr")
+    LV_ModifyCol(3, "AutoHdr")
+
+    ClearImagePreview()
+}
+Step 6: Update Functions that Handle Button Updates
+Update the UpdateFavoriteButton function to also handle the Have button:
+
+UpdateFavoriteButton(rowIndex) {
+    if (G_FavoriteStatus.MaxIndex() < rowIndex) {
+        GuiControl,, Button9, Toggle Favorite  ; Adjust button number as needed
+        GuiControl,, Button10, Toggle Have     ; Adjust button number as needed
+        return
+    }
+
+    isFavorite := G_FavoriteStatus[rowIndex]
+    if (isFavorite = 1) {
+        GuiControl,, Button9, Remove Favorite
+    } else {
+        GuiControl,, Button9, Add Favorite
+    }
+
+    isHave := G_HaveStatus[rowIndex]
+    if (isHave = 1) {
+        GuiControl,, Button10, Remove Have
+    } else {
+        GuiControl,, Button10, Add Have
     }
 }
-After running your script once with this code, you can remove it as the column will be permanently added to your database.
+Step 7: Add the ToggleHave Function
+Add this new function:
 
-The "Have" button will now work just like your other filter buttons (PSN, Played, etc.) and show only games where the Have column is set to 1.
+ToggleHave:
+    selectedRow := LV_GetNext()
+    if (!selectedRow) {
+        MsgBox, 48, No Selection, Please select a game from the list.
+        return
+    }
+
+    if (G_GameIds.MaxIndex() < selectedRow) {
+        MsgBox, 48, No Data, No data found for selected row.
+        return
+    }
+
+    gameId := G_GameIds[selectedRow]
+    currentHave := G_HaveStatus[selectedRow]
+    newHave := (currentHave = 1) ? 0 : 1
+
+    StringReplace, escapedGameId, gameId, ', '', All
+    sql := "UPDATE games SET Have = " . newHave . " WHERE GameId = '" . escapedGameId . "'"
+
+    if !db.Exec(sql) {
+        MsgBox, 16, Database Error, Failed to update have status
+        return
+    }
+
+    G_HaveStatus[selectedRow] := newHave
+    UpdateFavoriteButton(selectedRow)  ; This will now update both buttons
+
+    statusText := (newHave = 1) ? "marked as owned" : "unmarked as owned"
+    gameTitle := G_GameTitles[selectedRow]
+    MsgBox, 64, Success, %gameTitle% has been %statusText%!
+return
+Step 8: Update ClearImagePreview Function
+ClearImagePreview() {
+    GuiControl,, GameIcon,
+    GuiControl,, ImageStatus, Select a game to see its icon
+    GuiControl,, Button9, Toggle Favorite
+    GuiControl,, Button10, Toggle Have     ; ADD THIS LINE
+    CurrentSelectedRow := 0
+}
+Step 9: Update ClearSearch Function
+ClearSearch:
+    GuiControl,, SearchTerm
+    LV_Delete()
+    ClearImagePreview()
+
+    ; Reset game counter
+    GuiControl,, GameCounter, Games: 0
+
+    ; Clear arrays
+    G_GameIds := []
+    G_GameTitles := []
+    G_EbootPaths := []
+    G_IconPaths := []
+    G_PicPaths := []
+    G_FavoriteStatus := []
+    G_HaveStatus := []  ; ADD THIS LINE
+return
+Now you'll have both a "Have" filter button and a "Toggle Have" button that work just like the favorite system. Users can mark games as owned/not owned, and filter to show only owned games.
