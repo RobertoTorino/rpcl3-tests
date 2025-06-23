@@ -1,274 +1,335 @@
-Step 1: Add Global Array for Have Status
-Add this to your global array declarations at the top:
+#SingleInstance Force
+#NoEnv
+#Include %A_ScriptDir%\tools\SQLiteDB.ahk
 
-; Global array declarations - ADD THIS SECTION
-Global G_GameIds := []
-Global G_GameTitles := []
-Global G_EbootPaths := []
-Global G_IconPaths := []
-Global G_PicPaths := []
-Global G_FavoriteStatus := []
-Global G_HaveStatus := []  ; ADD THIS LINE
-Global CurrentSelectedRow := 0
-Step 2: Update Action Buttons Section
-Replace your action buttons section with this (adds the Toggle Have button):
+; Icon Manager Script
+db := new SQLiteDB()
+if !db.OpenDB(A_ScriptDir . "\games.db") {
+    err := db.ErrorMsg
+    MsgBox, 16, DB Error, Failed to open DB.`n%err%
+    ExitApp
+}
 
-; Action buttons
-Gui, Add, Button, gToggleFavorite x95 y450 w80 h25, Toggle Favorite
-Gui, Add, Button, gToggleHave x180 y450 w80 h25, Toggle Have
-Gui, Add, Button, gLaunchGame x270 y420 w80 h30, Launch
-Gui, Add, Button, gClearSearch x270 y450 w80 h30, Clear
-Step 3: Update All SQL Queries to Include Have Column
-Update all your "Show" functions to include the Have column:
+; Create Icon Manager GUI
+Gui, Font, s10, Segoe UI
 
-ShowAll:
-    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games ORDER BY GameTitle LIMIT 50"
+; Search/Select Game section
+Gui, Add, GroupBox, x10 y10 w480 h100, Select Game
+Gui, Add, Text, x20 y30, Search game:
+Gui, Add, Edit, vSearchTerm x20 y50 w200 h20
+Gui, Add, Button, gSearchGames x230 y50 w60 h20, Search
+Gui, Add, ComboBox, vGameSelect x20 y75 w400 h200 gGameSelected, Select a game...
 
-    if !db.GetTable(sql, result) {
-        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
-        return
-    }
+; Current Game Info section
+Gui, Add, GroupBox, x10 y120 w480 h120, Current Game Info
+Gui, Add, Text, x20 y140, Selected Game:
+Gui, Add, Text, vSelectedGame x20 y155 w450 h20, None selected
+Gui, Add, Text, x20 y175, Current Icon Path:
+Gui, Add, Text, vCurrentIconPath x20 y190 w450 h20, -
+Gui, Add, Text, x20 y205, Icon in Database:
+Gui, Add, Text, vIconInDB x20 y220 w100 h20, Checking...
 
-    PopulateResults(result)
+; Icon Preview section
+Gui, Add, GroupBox, x10 y250 w240 h150, Current Icon Preview
+Gui, Add, Picture, vCurrentIcon x20 y270 w320 h176,
+Gui, Add, Text, vIconStatus x20 y340 w200 h20, No icon loaded
+
+; Icon Actions section
+Gui, Add, GroupBox, x260 y250 w230 h150, Icon Actions
+Gui, Add, Button, gSaveExistingIcon x270 y270 w200 h30, Save Existing Icon to DB
+Gui, Add, Button, gBrowseAndSaveIcon x270 y310 w200 h30, Browse & Save New Icon
+Gui, Add, Button, gDeleteIcon x270 y350 w200 h30, Delete Icon from DB
+
+; Progress section
+Gui, Add, GroupBox, x10 y410 w480 h80, Status
+Gui, Add, Text, vStatusText x20 y430 w450 h40, Ready. Select a game to manage its icon.
+
+Gui, Show, w500 h500, Icon Manager
 return
 
-ShowFavorites:
-    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE Favorite = 1 ORDER BY GameTitle LIMIT 50"
-
-    if !db.GetTable(sql, result) {
-        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
-        return
-    }
-
-    PopulateResults(result)
-return
-
-ShowPlayed:
-    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE Played = 1 ORDER BY GameTitle LIMIT 50"
-
-    if !db.GetTable(sql, result) {
-        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
-        return
-    }
-
-    PopulateResults(result)
-return
-
-ShowPSN:
-    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE PSN = 1 ORDER BY GameTitle LIMIT 50"
-
-    if !db.GetTable(sql, result) {
-        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
-        return
-    }
-
-    PopulateResults(result)
-return
-
-ShowArcade:
-    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE ArcadeGame = 1 ORDER BY GameTitle LIMIT 50"
-
-    if !db.GetTable(sql, result) {
-        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
-        return
-    }
-
-    PopulateResults(result)
-return
-
-ShowHave:
-    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games WHERE Have = 1 ORDER BY GameTitle LIMIT 50"
-
-    if !db.GetTable(sql, result) {
-        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
-        return
-    }
-
-    PopulateResults(result)
-return
-Step 4: Update Search Function
-Search:
+SearchGames:
     Gui, Submit, NoHide
 
-    searchTerm := Trim(SearchTerm)
-    if (searchTerm = "") {
+    if (SearchTerm = "") {
         MsgBox, 48, Input Required, Please enter a search term.
         return
     }
 
-    StringReplace, escapedTerm, searchTerm, ', '', All
-    whereClause := "WHERE (GameTitle LIKE '%" . escapedTerm . "%' OR GameId LIKE '%" . escapedTerm . "%')"
-
-    sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite, Have FROM games " . whereClause . " ORDER BY GameTitle LIMIT 50"
+    ; Search for games - fixed StrReplace for AHK v1
+    StringReplace, searchTerm, SearchTerm, ', '', All
+    sql := "SELECT GameId, GameTitle FROM games WHERE GameTitle LIKE '%" . searchTerm . "%' OR GameId LIKE '%" . searchTerm . "%' ORDER BY GameTitle LIMIT 20"
 
     if !db.GetTable(sql, result) {
-        MsgBox, 16, Query Error, % "Query failed:`n" . db.ErrorMsg
+        MsgBox, 16, Query Error, Search failed
         return
     }
 
-    PopulateResults(result)
-return
-Step 5: Update PopulateResults Function
-Replace your PopulateResults function with this updated version:
+    ; Clear and populate combo box
+    GuiControl,, GameSelect, |Select a game...
 
-PopulateResults(result) {
-    ; Make sure we're working with global arrays
-    Global G_GameIds, G_GameTitles, G_EbootPaths, G_IconPaths, G_PicPaths, G_FavoriteStatus, G_HaveStatus
-
-    ; Clear ListView
-    LV_Delete()
-
-    ; Extract result row count first
-    resultRowCount := result.RowCount
-
-    if (resultRowCount = 0) {
-        LV_Add("", "", "No results found", "")
-        ; Update counter to show 0 games
-        GuiControl,, GameCounter, Games: 0
-        ClearImagePreview()
+    if (result.RowCount = 0) {
+        GuiControl,, StatusText, No games found matching "%SearchTerm%"
         return
     }
 
-    ; Clear and reinitialize arrays
-    G_GameIds := []
-    G_GameTitles := []
-    G_EbootPaths := []
-    G_IconPaths := []
-    G_PicPaths := []
-    G_FavoriteStatus := []
-    G_HaveStatus := []
-
-    ; Add results to ListView and store data
-    Loop, %resultRowCount% {
+    ; Add games to combo box
+    Loop, % result.RowCount {
         row := ""
         if result.GetRow(A_Index, row) {
-            ; Store data in arrays (1-based indexing)
-            G_GameIds[A_Index] := row[1]
-            G_GameTitles[A_Index] := row[2]
-            G_EbootPaths[A_Index] := row[3]
-            G_FavoriteStatus[A_Index] := row[6]
-            G_HaveStatus[A_Index] := row[7]  ; ADD THIS LINE
-
-            ; Construct full paths
-            rawIconPath := row[4]
-            rawPicPath := row[5]
-
-            if (rawIconPath != "") {
-                cleanIconPath := LTrim(rawIconPath, "\/")
-                G_IconPaths[A_Index] := A_ScriptDir . "\" . cleanIconPath
-            } else {
-                G_IconPaths[A_Index] := ""
-            }
-
-            if (rawPicPath != "") {
-                cleanPicPath := LTrim(rawPicPath, "\/")
-                G_PicPaths[A_Index] := A_ScriptDir . "\" . cleanPicPath
-            } else {
-                G_PicPaths[A_Index] := ""
-            }
-
-            ; Add row to ListView
-            favoriteIcon := (row[6] = 1) ? "*" : ""
-            LV_Add("", favoriteIcon, row[1], row[2])
+            gameEntry := row[1] . " - " . row[2]
+            GuiControl,, GameSelect, %gameEntry%
         }
     }
 
-    ; Update game counter display
-    gameCount := G_GameIds.MaxIndex()
-    if (gameCount = "") {
-        gameCount := 0
-    }
-    GuiControl,, GameCounter, Games: %gameCount%
+    statusText := "Found " . result.RowCount . " games. Select one from the dropdown."
+    GuiControl,, StatusText, %statusText%
+return
 
-    ; Auto-resize columns
-    LV_ModifyCol(1, 25)
-    LV_ModifyCol(2, "AutoHdr")
-    LV_ModifyCol(3, "AutoHdr")
 
-    ClearImagePreview()
-}
-Step 6: Update Functions that Handle Button Updates
-Update the UpdateFavoriteButton function to also handle the Have button:
 
-UpdateFavoriteButton(rowIndex) {
-    if (G_FavoriteStatus.MaxIndex() < rowIndex) {
-        GuiControl,, Button9, Toggle Favorite  ; Adjust button number as needed
-        GuiControl,, Button10, Toggle Have     ; Adjust button number as needed
+GameSelected:
+    Gui, Submit, NoHide
+
+    if (GameSelect = "Select a game..." || GameSelect = "") {
         return
     }
 
-    isFavorite := G_FavoriteStatus[rowIndex]
-    if (isFavorite = 1) {
-        GuiControl,, Button9, Remove Favorite
+    ; Extract Game ID from selection (format: "GAMEID - Title")
+    StringSplit, parts, GameSelect, %A_Space%-%A_Space%
+    selectedGameId := parts1
+
+    ; Get detailed game info - fixed StrReplace for AHK v1
+    StringReplace, escapedGameId, selectedGameId, ', '', All
+    sql := "SELECT GameId, GameTitle, Icon0, IconBlob FROM games WHERE GameId = '" . escapedGameId . "'"
+
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, Failed to get game details
+        return
+    }
+
+    if (result.RowCount = 0) {
+        MsgBox, 16, Error, Game not found
+        return
+    }
+
+    result.GetRow(1, row)
+    CurrentGameId := row[1]
+    CurrentGameTitle := row[2]
+    CurrentIcon0Path := row[3]  ; This is the relative path from database
+    CurrentIconBlob := row[4]
+
+    ; Build the full path to the icon file
+    if (CurrentIcon0Path != "") {
+        ; Remove any leading slash or backslash and build full path
+        CurrentIcon0Path := LTrim(CurrentIcon0Path, "\/")
+        CurrentIconPath := A_ScriptDir . "\" . CurrentIcon0Path
     } else {
-        GuiControl,, Button9, Add Favorite
+        CurrentIconPath := ""
     }
 
-    isHave := G_HaveStatus[rowIndex]
-    if (isHave = 1) {
-        GuiControl,, Button10, Remove Have
+    ; Update GUI
+    GuiControl,, SelectedGame, %CurrentGameId% - %CurrentGameTitle%
+    GuiControl,, CurrentIconPath, %CurrentIconPath%
+
+    ; Check if icon exists in database
+    if (CurrentIconBlob != "" && IsObject(CurrentIconBlob)) {
+        iconText := "Yes (Size: " . CurrentIconBlob.Size . " bytes)"
+        GuiControl,, IconInDB, %iconText%
+
+        ; Show icon from database
+        tempFile := A_Temp . "\preview_icon_" . A_TickCount . ".png"
+        file := FileOpen(tempFile, "w")
+        if (file) {
+            file.RawWrite(CurrentIconBlob.Blob, CurrentIconBlob.Size)
+            file.Close()
+            GuiControl,, CurrentIcon, %tempFile%
+            GuiControl,, IconStatus, From database
+
+            ; Cleanup temp file later
+            SetTimer, CleanupPreview, -2000
+        }
     } else {
-        GuiControl,, Button10, Add Have
-    }
-}
-Step 7: Add the ToggleHave Function
-Add this new function:
+        GuiControl,, IconInDB, No
 
-ToggleHave:
-    selectedRow := LV_GetNext()
-    if (!selectedRow) {
-        MsgBox, 48, No Selection, Please select a game from the list.
+        ; Try to show icon from constructed file path
+        if (CurrentIconPath != "" && FileExist(CurrentIconPath)) {
+            GuiControl,, CurrentIcon, %CurrentIconPath%
+            statusText := "From file: " . CurrentIconPath
+            GuiControl,, IconStatus, %statusText%
+        } else {
+            GuiControl,, CurrentIcon,
+            if (CurrentIconPath != "") {
+                statusText := "File not found: " . CurrentIconPath
+                GuiControl,, IconStatus, %statusText%
+            } else {
+                GuiControl,, IconStatus, No icon path in database
+            }
+        }
+    }
+
+    GuiControl,, StatusText, Game selected: %CurrentGameTitle%
+
+return
+
+
+CleanupPreview:
+    Loop, Files, %A_Temp%\preview_icon_*.png
+    {
+        FileDelete, %A_LoopFileFullPath%
+    }
+return
+
+
+SaveExistingIcon:
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Selection, Please select a game first.
         return
     }
 
-    if (G_GameIds.MaxIndex() < selectedRow) {
-        MsgBox, 48, No Data, No data found for selected row.
+    if (CurrentIconPath = "" || !FileExist(CurrentIconPath)) {
+        MsgBox, 48, No File, No existing icon file found for this game.`n`nExpected location: %CurrentIconPath%
         return
     }
 
-    gameId := G_GameIds[selectedRow]
-    currentHave := G_HaveStatus[selectedRow]
-    newHave := (currentHave = 1) ? 0 : 1
+    ; Confirm action
+    MsgBox, 4, Confirm Save, Save the existing icon file to database?`n`nFile: %CurrentIconPath%`nGame: %CurrentGameTitle%
 
+    IfMsgBox, No
+        return
+
+    ; Read file and save to database
+    SaveIconToDatabase(CurrentIconPath, CurrentGameId, CurrentGameTitle)
+return
+
+
+BrowseAndSaveIcon:
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Selection, Please select a game first.
+        return
+    }
+
+    ; Browse for icon file
+    FileSelectFile, selectedIcon, 1, , Select icon file, Image Files (*.png; *.jpg; *.jpeg; *.bmp; *.gif)
+
+    if (selectedIcon = "") {
+        return
+    }
+
+    ; Confirm action
+    MsgBox, 4, Confirm Save, Save this icon to database?`n`nFile: %selectedIcon%`nGame: %CurrentGameTitle%
+
+    IfMsgBox, No
+        return
+
+    ; Save selected file to database
+    SaveIconToDatabase(selectedIcon, CurrentGameId, CurrentGameTitle)
+return
+
+
+SaveIconToDatabase(iconPath, gameId, gameTitle) {
+    GuiControl,, StatusText, Saving icon to database...
+
+    ; Check file size (optional - warn if very large)
+    FileGetSize, fileSize, %iconPath%
+    if (fileSize > 500000) {  ; 500KB
+        MsgBox, 4, Large File, Warning: This file is quite large (%fileSize% bytes).`nContinue anyway?
+        IfMsgBox, No
+            return
+    }
+
+    ; Read file into memory
+    file := FileOpen(iconPath, "r")
+    if (!file) {
+        GuiControl,, StatusText, Error: Could not open file
+        MsgBox, 16, File Error, Could not open icon file: %iconPath%
+        return
+    }
+
+    ; Read file data
+    fileLength := file.Length
+    VarSetCapacity(iconData, fileLength)
+    bytesRead := file.RawRead(iconData, fileLength)
+    file.Close()
+
+    if (bytesRead != fileLength) {
+        GuiControl,, StatusText, Error: Could not read file completely
+        MsgBox, 16, Read Error, Could not read icon file completely`nExpected: %fileLength% bytes`nRead: %bytesRead% bytes
+        return
+    }
+
+    ; Create BLOB array for SQLite
+    blobArray := []
+    blobArray[1] := {Addr: &iconData, Size: bytesRead}
+
+    ; Update database with BLOB - fixed StrReplace for AHK v1
     StringReplace, escapedGameId, gameId, ', '', All
-    sql := "UPDATE games SET Have = " . newHave . " WHERE GameId = '" . escapedGameId . "'"
+    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
 
-    if !db.Exec(sql) {
-        MsgBox, 16, Database Error, Failed to update have status
+    if (db.StoreBLOB(updateSql, blobArray)) {
+        statusText := "Success: Icon saved to database (" . bytesRead . " bytes)"
+        GuiControl,, StatusText, %statusText%
+
+        iconText := "Yes (Size: " . bytesRead . " bytes)"
+        GuiControl,, IconInDB, %iconText%
+
+        ; Update preview
+        GuiControl,, CurrentIcon, %iconPath%
+        GuiControl,, IconStatus, Saved to database
+
+        MsgBox, 64, Success, Icon successfully saved to database!
+
+    } else {
+        errMsg := db.ErrorMsg
+        GuiControl,, StatusText, Error: Failed to save icon to database
+        MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%
+    }
+}
+
+
+DeleteIcon:
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Selection, Please select a game first.
         return
     }
 
-    G_HaveStatus[selectedRow] := newHave
-    UpdateFavoriteButton(selectedRow)  ; This will now update both buttons
+    ; Confirm deletion
+    MsgBox, 4, Confirm Delete, Delete the icon from database?`n`nGame: %CurrentGameTitle%`n`nNote: This will only remove it from the database, not delete the original file.
 
-    statusText := (newHave = 1) ? "marked as owned" : "unmarked as owned"
-    gameTitle := G_GameTitles[selectedRow]
-    MsgBox, 64, Success, %gameTitle% has been %statusText%!
+    IfMsgBox, No
+        return
+
+    ; Delete from database - fixed StrReplace for AHK v1
+    StringReplace, escapedGameId, CurrentGameId, ', '', All
+    sql := "UPDATE games SET IconBlob = NULL WHERE GameId = '" . escapedGameId . "'"
+
+    if (db.Exec(sql)) {
+        GuiControl,, StatusText, Icon deleted from database
+        GuiControl,, IconInDB, No
+
+        ; Update preview to show file version if available
+        if (CurrentIconPath != "" && FileExist(CurrentIconPath)) {
+            GuiControl,, CurrentIcon, %CurrentIconPath%
+            GuiControl,, IconStatus, From file (database version deleted)
+        } else {
+            GuiControl,, CurrentIcon,
+            GuiControl,, IconStatus, No icon available
+        }
+
+        MsgBox, 64, Success, Icon deleted from database
+
+    } else {
+        errMsg := db.ErrorMsg
+        GuiControl,, StatusText, Error: Failed to delete icon
+        MsgBox, 16, Database Error, Failed to delete icon:`n%errMsg%
+    }
 return
-Step 8: Update ClearImagePreview Function
-ClearImagePreview() {
-    GuiControl,, GameIcon,
-    GuiControl,, ImageStatus, Select a game to see its icon
-    GuiControl,, Button9, Toggle Favorite
-    GuiControl,, Button10, Toggle Have     ; ADD THIS LINE
-    CurrentSelectedRow := 0
-}
-Step 9: Update ClearSearch Function
-ClearSearch:
-    GuiControl,, SearchTerm
-    LV_Delete()
-    ClearImagePreview()
 
-    ; Reset game counter
-    GuiControl,, GameCounter, Games: 0
+db.CloseDB()
 
-    ; Clear arrays
-    G_GameIds := []
-    G_GameTitles := []
-    G_EbootPaths := []
-    G_IconPaths := []
-    G_PicPaths := []
-    G_FavoriteStatus := []
-    G_HaveStatus := []  ; ADD THIS LINE
-return
-Now you'll have both a "Have" filter button and a "Toggle Have" button that work just like the favorite system. Users can mark games as owned/not owned, and filter to show only owned games.
+GuiClose:
+    ; Cleanup any temp files
+    Loop, Files, %A_Temp%\preview_icon_*.png
+    {
+        FileDelete, %A_LoopFileFullPath%
+    }
+ExitApp
