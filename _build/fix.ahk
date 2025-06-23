@@ -31,8 +31,8 @@ Gui, Add, Text, vIconInDB x20 y220 w100 h20, Checking...
 
 ; Icon Preview section
 Gui, Add, GroupBox, x10 y250 w240 h150, Current Icon Preview
-Gui, Add, Picture, vCurrentIcon x20 y270 w320 h176,
-Gui, Add, Text, vIconStatus x20 y340 w200 h20, No icon loaded
+Gui, Add, Picture, vCurrentIcon x20 y270 w220 h100,
+Gui, Add, Text, vIconStatus x20 y375 w200 h20, No icon loaded
 
 ; Icon Actions section
 Gui, Add, GroupBox, x260 y250 w230 h150, Icon Actions
@@ -113,12 +113,11 @@ GameSelected:
     result.GetRow(1, row)
     CurrentGameId := row[1]
     CurrentGameTitle := row[2]
-    CurrentIcon0Path := row[3]  ; This is the relative path from database
+    CurrentIcon0Path := row[3]
     CurrentIconBlob := row[4]
 
     ; Build the full path to the icon file
     if (CurrentIcon0Path != "") {
-        ; Remove any leading slash or backslash and build full path
         CurrentIcon0Path := LTrim(CurrentIcon0Path, "\/")
         CurrentIconPath := A_ScriptDir . "\" . CurrentIcon0Path
     } else {
@@ -129,27 +128,42 @@ GameSelected:
     GuiControl,, SelectedGame, %CurrentGameId% - %CurrentGameTitle%
     GuiControl,, CurrentIconPath, %CurrentIconPath%
 
-    ; Check if icon exists in database
-    if (CurrentIconBlob != "" && IsObject(CurrentIconBlob)) {
-        iconText := "Yes (Size: " . CurrentIconBlob.Size . " bytes)"
-        GuiControl,, IconInDB, %iconText%
+    ; Check if icon exists in database - handle both BLOB and Base64
+    if (CurrentIconBlob != "" && CurrentIconBlob != "NULL") {
+        if (IsObject(CurrentIconBlob)) {
+            ; Real BLOB object
+            iconText := "Yes (BLOB: " . CurrentIconBlob.Size . " bytes)"
+            GuiControl,, IconInDB, %iconText%
 
-        ; Show icon from database
-        tempFile := A_Temp . "\preview_icon_" . A_TickCount . ".png"
-        file := FileOpen(tempFile, "w")
-        if (file) {
-            file.RawWrite(CurrentIconBlob.Blob, CurrentIconBlob.Size)
-            file.Close()
-            GuiControl,, CurrentIcon, %tempFile%
-            GuiControl,, IconStatus, From database
+            ; Show icon from BLOB
+            tempFile := A_Temp . "\preview_icon_" . A_TickCount . ".png"
+            file := FileOpen(tempFile, "w")
+            if (file) {
+                file.RawWrite(CurrentIconBlob.Blob, CurrentIconBlob.Size)
+                file.Close()
+                GuiControl,, CurrentIcon, %tempFile%
+                GuiControl,, IconStatus, From database (BLOB)
+                SetTimer, CleanupPreview, -2000
+            }
+        } else {
+            ; Assume Base64 string
+            iconText := "Yes (Base64: " . StrLen(CurrentIconBlob) . " chars)"
+            GuiControl,, IconInDB, %iconText%
 
-            ; Cleanup temp file later
-            SetTimer, CleanupPreview, -2000
+            ; Decode Base64 and show icon
+            tempFile := A_Temp . "\preview_icon_" . A_TickCount . ".png"
+            if (DecodeBase64ToFile(CurrentIconBlob, tempFile)) {
+                GuiControl,, CurrentIcon, %tempFile%
+                GuiControl,, IconStatus, From database (Base64)
+                SetTimer, CleanupPreview, -2000
+            } else {
+                GuiControl,, IconStatus, Error decoding Base64
+            }
         }
     } else {
         GuiControl,, IconInDB, No
 
-        ; Try to show icon from constructed file path
+        ; Try to show icon from file path
         if (CurrentIconPath != "" && FileExist(CurrentIconPath)) {
             GuiControl,, CurrentIcon, %CurrentIconPath%
             statusText := "From file: " . CurrentIconPath
@@ -192,7 +206,6 @@ SaveExistingIcon:
     IfMsgBox, No
         return
 
-    ; Read file and save to database
     SaveIconToDatabase(CurrentIconPath, CurrentGameId, CurrentGameTitle)
 return
 
@@ -215,130 +228,120 @@ BrowseAndSaveIcon:
     IfMsgBox, No
         return
 
-    ; Save selected file to database
     SaveIconToDatabase(selectedIcon, CurrentGameId, CurrentGameTitle)
 return
 
 SaveIconToDatabase(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon to database...
 
-    ; Check file size (optional - warn if very large)
+    ; Check file size
     FileGetSize, fileSize, %iconPath%
-    if (fileSize > 500000) {  ; 500KB
+    if (fileSize > 500000) {
         MsgBox, 4, Large File, Warning: This file is quite large (%fileSize% bytes).`nContinue anyway?
         IfMsgBox, No
             return
     }
 
-    ; Prepare SQL first - fixed StrReplace for AHK v1
+    ; Read file as binary and convert to Base64
+    FileRead, iconBinary, *c %iconPath%
+    if ErrorLevel {
+        GuiControl,, StatusText, Error: Could not read file
+        MsgBox, 16, File Error, Could not read icon file: %iconPath%
+        return
+    }
+
+    ; Convert to Base64
+    base64Data := EncodeBase64String(iconBinary)
+    if (base64Data = "") {
+        GuiControl,, StatusText, Error: Could not encode to Base64
+        MsgBox, 16, Encoding Error, Could not convert file to Base64
+        return
+    }
+
+    ; Escape single quotes in Base64 (just in case)
+    StringReplace, base64Data, base64Data, ', '', All
+
+    ; Prepare and execute SQL
     StringReplace, escapedGameId, gameId, ', '', All
-    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
+    updateSql := "UPDATE games SET IconBlob = '" . base64Data . "' WHERE GameId = '" . escapedGameId . "'"
 
-    ; Read file into memory
-    file := FileOpen(iconPath, "r")
-    if (!file) {
-        GuiControl,, StatusText, Error: Could not open file
-        MsgBox, 16, File Error, Could not open icon file: %iconPath%
-        return
-    }
-
-    ; Read file data
-    fileLength := file.Length
-    VarSetCapacity(iconData, fileLength)
-    bytesRead := file.RawRead(iconData, fileLength)
-    file.Close()
-
-    if (bytesRead != fileLength) {
-        GuiControl,, StatusText, Error: Could not read file completely
-        MsgBox, 16, Read Error, Could not read icon file completely`nExpected: %fileLength% bytes`nRead: %bytesRead% bytes
-        return
-    }
-
-    ; Try different BLOB array formats
-    ; Format 1: Simple array with address and size
-    blobArray := [{Addr: &iconData, Size: bytesRead}]
-
-    ; Debug info
-    MsgBox, 4, Debug, Data size: %bytesRead%`nSQL: %updateSql%`nTry StoreBLOB?
-    IfMsgBox, No
-        return
-
-    result := db.StoreBLOB(updateSql, blobArray)
-
-    if (result) {
-        statusText := "Success: Icon saved to database (" . bytesRead . " bytes)"
+    if (db.Exec(updateSql)) {
+        bytesOriginal := StrLen(iconBinary)
+        statusText := "Success: Icon saved as Base64 (" . bytesOriginal . " bytes original)"
         GuiControl,, StatusText, %statusText%
 
-        iconText := "Yes (Size: " . bytesRead . " bytes)"
+        iconText := "Yes (Base64: " . StrLen(base64Data) . " chars)"
         GuiControl,, IconInDB, %iconText%
 
         ; Update preview
         GuiControl,, CurrentIcon, %iconPath%
-        GuiControl,, IconStatus, Saved to database
+        GuiControl,, IconStatus, Saved to database (Base64)
 
-        MsgBox, 64, Success, Icon successfully saved to database!
+        MsgBox, 64, Success, Icon successfully saved to database as Base64!
+
+        ; Refresh the game selection to show updated status
+        Gosub, GameSelected
 
     } else {
-        ; If first method fails, try alternative approaches
-
-        ; Method 2: Try with just the data
-        blobArray2 := [iconData]
-        result2 := db.StoreBLOB(updateSql, blobArray2)
-
-        if (result2) {
-            statusText := "Success: Icon saved to database (" . bytesRead . " bytes) - Method 2"
-            GuiControl,, StatusText, %statusText%
-            iconText := "Yes (Size: " . bytesRead . " bytes)"
-            GuiControl,, IconInDB, %iconText%
-            GuiControl,, CurrentIcon, %iconPath%
-            GuiControl,, IconStatus, Saved to database
-            MsgBox, 64, Success, Icon successfully saved to database!
-            return
-        }
-
-        ; Method 3: Try using regular Exec with binary data
-        ; This might work if StoreBLOB is not properly implemented
-        VarSetCapacity(binaryData, bytesRead)
-        DllCall("RtlMoveMemory", "Ptr", &binaryData, "Ptr", &iconData, "UInt", bytesRead)
-
-        ; Convert to Base64 as last resort
-        base64 := EncodeBase64(&iconData, bytesRead)
-        if (base64 != "") {
-            base64Sql := "UPDATE games SET IconBlob = '" . base64 . "' WHERE GameId = '" . escapedGameId . "'"
-            result3 := db.Exec(base64Sql)
-
-            if (result3) {
-                statusText := "Success: Icon saved as Base64 (" . bytesRead . " bytes)"
-                GuiControl,, StatusText, %statusText%
-                iconText := "Yes (Base64 - Size: " . bytesRead . " bytes)"
-                GuiControl,, IconInDB, %iconText%
-                GuiControl,, CurrentIcon, %iconPath%
-                GuiControl,, IconStatus, Saved to database (Base64)
-                MsgBox, 64, Success, Icon successfully saved to database as Base64!
-                return
-            }
-        }
-
-        ; If all methods fail, show error
         errMsg := db.ErrorMsg
         GuiControl,, StatusText, Error: Failed to save icon to database
-        MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%`n`nTried multiple methods but all failed.
+        MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%
     }
 }
 
-; Base64 encoding function for fallback
-EncodeBase64(pData, dataSize) {
-    ; Calculate required buffer size
-    DllCall("Crypt32.dll\CryptBinaryToString", "Ptr", pData, "UInt", dataSize, "UInt", 1, "Ptr", 0, "UIntP", reqSize)
+; Base64 encoding function
+EncodeBase64String(inputData) {
+    ; Get input size
+    inputSize := StrLen(inputData)
+    if (inputSize = 0)
+        return ""
+
+    ; Calculate required buffer size for Base64
+    DllCall("Crypt32.dll\CryptBinaryToString", "Ptr", &inputData, "UInt", inputSize, "UInt", 0x1, "Ptr", 0, "UIntP", reqSize)
 
     ; Allocate buffer
-    VarSetCapacity(base64, reqSize * 2)
+    VarSetCapacity(base64Output, reqSize * 2, 0)
 
     ; Encode to Base64
-    if DllCall("Crypt32.dll\CryptBinaryToString", "Ptr", pData, "UInt", dataSize, "UInt", 1, "Str", base64, "UIntP", reqSize) {
-        return base64
+    success := DllCall("Crypt32.dll\CryptBinaryToString", "Ptr", &inputData, "UInt", inputSize, "UInt", 0x1, "Str", base64Output, "UIntP", reqSize)
+
+    if (success) {
+        ; Remove any newlines/carriage returns that Windows might add
+        StringReplace, base64Output, base64Output, `r`n, , All
+        StringReplace, base64Output, base64Output, `r, , All
+        StringReplace, base64Output, base64Output, `n, , All
+        return base64Output
     }
+
     return ""
+}
+
+; Base64 decoding function
+DecodeBase64ToFile(base64Data, outputFile) {
+    if (base64Data = "" || outputFile = "")
+        return false
+
+    ; Calculate required buffer size
+    dataSize := StrLen(base64Data)
+    DllCall("Crypt32.dll\CryptStringToBinary", "Str", base64Data, "UInt", dataSize, "UInt", 0x1, "Ptr", 0, "UIntP", reqSize, "Ptr", 0, "Ptr", 0)
+
+    ; Allocate buffer
+    VarSetCapacity(decodedData, reqSize, 0)
+
+    ; Decode Base64
+    success := DllCall("Crypt32.dll\CryptStringToBinary", "Str", base64Data, "UInt", dataSize, "UInt", 0x1, "Ptr", &decodedData, "UIntP", reqSize, "Ptr", 0, "Ptr", 0)
+
+    if (success) {
+        ; Write to file
+        file := FileOpen(outputFile, "w")
+        if (file) {
+            file.RawWrite(decodedData, reqSize)
+            file.Close()
+            return true
+        }
+    }
+
+    return false
 }
 
 DeleteIcon:
@@ -353,7 +356,7 @@ DeleteIcon:
     IfMsgBox, No
         return
 
-    ; Delete from database - fixed StrReplace for AHK v1
+    ; Delete from database
     StringReplace, escapedGameId, CurrentGameId, ', '', All
     sql := "UPDATE games SET IconBlob = NULL WHERE GameId = '" . escapedGameId . "'"
 
