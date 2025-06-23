@@ -75,6 +75,8 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
         MsgBox, 16, Database Error, Failed to save icon to database:`nErrorMsg: %errMsg%`nErrorCode: %errCode%
     }
 }
+
+
 Run this debug version and tell me:
 
 What values you see in the first debug message (file size, memory address, etc.)
@@ -147,3 +149,42 @@ SaveIconToDatabaseAlternative(iconPath, gameId, gameTitle) {
 }
 Try both approaches and let me know what error messages you get.
 The prepared statement method might work better since it uses the native SQLite binding functions directly.
+
+
+---
+
+
+
+---------------------------
+Debug Info
+---------------------------
+File Size: 77970 bytes
+Memory Address: 50224784
+SQL: UPDATE games SET IconBlob = ? WHERE GameId = 'BLUS30001'
+
+BlobArray[1].Addr: 50224784
+BlobArray[1].Size: 77970
+
+Proceed with StoreBLOB?
+---------------------------
+Yes   No
+---------------------------
+---------------------------
+StoreBLOB Result
+---------------------------
+Result:
+ErrorMsg:
+ErrorCode:
+---------------------------
+OK
+---------------------------
+---------------------------
+Database Error
+---------------------------
+Failed to save icon to database:
+ErrorMsg:
+ErrorCode:
+---------------------------
+OK
+---------------------------
+
