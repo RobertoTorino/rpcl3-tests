@@ -69,41 +69,8 @@ LV_Delete()
 
 
 
-LaunchGame:
-selectedRow := LV_GetNext()
-if (!selectedRow) {
-MsgBox, 48, No Selection, Please select a game from the list.
-return
-}
 
-    ; Get game info using correct variable names
-    gameId := GameId%selectedRow%
-    gameTitle := GameTitle%selectedRow%
-    ebootPath := EbootPath%selectedRow%
-    
-    ; Debug what we retrieved
-    MsgBox, 0, Debug Retrieved, Row: %selectedRow%`nGameId: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
 
-    if (gameId = "") {
-        MsgBox, 16, Error, No game ID found for row %selectedRow%.
-        return
-    }
-
-    if (ebootPath = "") {
-        MsgBox, 16, Error, Could not find Eboot path for selected game.`nRow: %selectedRow%`nGameId: %gameId%`nTitle: %gameTitle%
-        return
-    }
-
-    ; Confirm launch
-    MsgBox, 4, Confirm Launch, Launch this game?`n`nGame ID: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
-
-    IfMsgBox, Yes
-    {
-        runCommand := "rpcs3.exe --no-gui --fullscreen """ ebootPath """"
-        IniWrite, %runCommand%, %A_ScriptDir%\launcher.ini, RUN_GAME, RunCommand
-        MsgBox, 64, Success, Game launch command written to INI:`n%runCommand%
-    }
-return
 
 ShowGameIcon(rowIndex) {
 ; Get the constructed full icon path - updated variable name
@@ -123,6 +90,7 @@ iconPath := IconPath%rowIndex%
         CurrentSelectedRow := rowIndex
     }
 }
+
 
 ShowLargeImage:
 if (CurrentSelectedRow <= 0)
@@ -145,6 +113,7 @@ return
     Gui, 2: Show, w600 h400
 return
 
+
 UpdateFavoriteButton(rowIndex) {
 isFavorite := FavoriteStatus%rowIndex%
 if (isFavorite = 1) {
@@ -153,6 +122,7 @@ GuiControl,, Button9, Remove Favorite
 GuiControl,, Button9, Add Favorite
 }
 }
+
 
 ToggleFavorite:
 selectedRow := LV_GetNext()
@@ -183,6 +153,7 @@ return
     gameTitle := GameTitle%selectedRow%
     MsgBox, 64, Success, %gameTitle% has been %statusText% favorites!
 return
+
 
 ClearSearch:
 GuiControl,, SearchTerm
