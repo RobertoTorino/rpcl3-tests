@@ -113,11 +113,12 @@ GameSelected:
     result.GetRow(1, row)
     CurrentGameId := row[1]
     CurrentGameTitle := row[2]
-    CurrentIcon0Path := row[3]
+    CurrentIcon0Path := row[3]  ; This is the relative path from database
     CurrentIconBlob := row[4]
 
     ; Build the full path to the icon file
     if (CurrentIcon0Path != "") {
+        ; Remove any leading slash or backslash and build full path
         CurrentIcon0Path := LTrim(CurrentIcon0Path, "\/")
         CurrentIconPath := A_ScriptDir . "\" . CurrentIcon0Path
     } else {
@@ -128,42 +129,27 @@ GameSelected:
     GuiControl,, SelectedGame, %CurrentGameId% - %CurrentGameTitle%
     GuiControl,, CurrentIconPath, %CurrentIconPath%
 
-    ; Check if icon exists in database - handle both BLOB and Base64
-    if (CurrentIconBlob != "" && CurrentIconBlob != "NULL") {
-        if (IsObject(CurrentIconBlob)) {
-            ; Real BLOB object
-            iconText := "Yes (BLOB: " . CurrentIconBlob.Size . " bytes)"
-            GuiControl,, IconInDB, %iconText%
+    ; Check if icon exists in database
+    if (CurrentIconBlob != "" && IsObject(CurrentIconBlob)) {
+        iconText := "Yes (Size: " . CurrentIconBlob.Size . " bytes)"
+        GuiControl,, IconInDB, %iconText%
 
-            ; Show icon from BLOB
-            tempFile := A_Temp . "\preview_icon_" . A_TickCount . ".png"
-            file := FileOpen(tempFile, "w")
-            if (file) {
-                file.RawWrite(CurrentIconBlob.Blob, CurrentIconBlob.Size)
-                file.Close()
-                GuiControl,, CurrentIcon, %tempFile%
-                GuiControl,, IconStatus, From database (BLOB)
-                SetTimer, CleanupPreview, -2000
-            }
-        } else {
-            ; Assume Base64 string
-            iconText := "Yes (Base64: " . StrLen(CurrentIconBlob) . " chars)"
-            GuiControl,, IconInDB, %iconText%
+        ; Show icon from database
+        tempFile := A_Temp . "\preview_icon_" . A_TickCount . ".png"
+        file := FileOpen(tempFile, "w")
+        if (file) {
+            file.RawWrite(CurrentIconBlob.Blob, CurrentIconBlob.Size)
+            file.Close()
+            GuiControl,, CurrentIcon, %tempFile%
+            GuiControl,, IconStatus, From database
 
-            ; Decode Base64 and show icon
-            tempFile := A_Temp . "\preview_icon_" . A_TickCount . ".png"
-            if (DecodeBase64ToFile(CurrentIconBlob, tempFile)) {
-                GuiControl,, CurrentIcon, %tempFile%
-                GuiControl,, IconStatus, From database (Base64)
-                SetTimer, CleanupPreview, -2000
-            } else {
-                GuiControl,, IconStatus, Error decoding Base64
-            }
+            ; Cleanup temp file later
+            SetTimer, CleanupPreview, -2000
         }
     } else {
         GuiControl,, IconInDB, No
 
-        ; Try to show icon from file path
+        ; Try to show icon from constructed file path
         if (CurrentIconPath != "" && FileExist(CurrentIconPath)) {
             GuiControl,, CurrentIcon, %CurrentIconPath%
             statusText := "From file: " . CurrentIconPath
@@ -206,6 +192,7 @@ SaveExistingIcon:
     IfMsgBox, No
         return
 
+    ; Read file and save to database
     SaveIconToDatabase(CurrentIconPath, CurrentGameId, CurrentGameTitle)
 return
 
@@ -228,6 +215,7 @@ BrowseAndSaveIcon:
     IfMsgBox, No
         return
 
+    ; Save selected file to database
     SaveIconToDatabase(selectedIcon, CurrentGameId, CurrentGameTitle)
 return
 
@@ -236,112 +224,112 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
 
     ; Check file size
     FileGetSize, fileSize, %iconPath%
-    if (fileSize > 500000) {
+    if (fileSize > 500000) {  ; 500KB
         MsgBox, 4, Large File, Warning: This file is quite large (%fileSize% bytes).`nContinue anyway?
         IfMsgBox, No
             return
     }
 
-    ; Read file as binary and convert to Base64
-    FileRead, iconBinary, *c %iconPath%
-    if ErrorLevel {
-        GuiControl,, StatusText, Error: Could not read file
-        MsgBox, 16, File Error, Could not read icon file: %iconPath%
+    ; Read file data
+    file := FileOpen(iconPath, "r")
+    if (!file) {
+        GuiControl,, StatusText, Error: Could not open file
+        MsgBox, 16, File Error, Could not open icon file: %iconPath%
         return
     }
 
-    ; Convert to Base64
-    base64Data := EncodeBase64String(iconBinary)
-    if (base64Data = "") {
-        GuiControl,, StatusText, Error: Could not encode to Base64
-        MsgBox, 16, Encoding Error, Could not convert file to Base64
+    fileLength := file.Length
+    VarSetCapacity(iconData, fileLength)
+    bytesRead := file.RawRead(iconData, fileLength)
+    file.Close()
+
+    if (bytesRead != fileLength) {
+        GuiControl,, StatusText, Error: Could not read file completely
+        MsgBox, 16, Read Error, Could not read icon file completely`nExpected: %fileLength% bytes`nRead: %bytesRead% bytes
         return
     }
 
-    ; Escape single quotes in Base64 (just in case)
-    StringReplace, base64Data, base64Data, ', '', All
-
-    ; Prepare and execute SQL
+    ; Prepare SQL
     StringReplace, escapedGameId, gameId, ', '', All
-    updateSql := "UPDATE games SET IconBlob = '" . base64Data . "' WHERE GameId = '" . escapedGameId . "'"
+    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
 
-    if (db.Exec(updateSql)) {
-        bytesOriginal := StrLen(iconBinary)
-        statusText := "Success: Icon saved as Base64 (" . bytesOriginal . " bytes original)"
+    ; Try multiple BLOB formats
+    success := false
+    method := ""
+
+    ; Method 1: Standard format with address and size
+    blobArray1 := [{Addr: &iconData, Size: bytesRead}]
+    if (db.StoreBLOB(updateSql, blobArray1)) {
+        success := true
+        method := "Address/Size format"
+    }
+
+    if (!success) {
+        ; Method 2: Just the raw data
+        blobArray2 := [iconData]
+        if (db.StoreBLOB(updateSql, blobArray2)) {
+            success := true
+            method := "Raw data format"
+        }
+    }
+
+    if (!success) {
+        ; Method 3: Different property names
+        blobArray3 := [{Data: iconData, Length: bytesRead}]
+        if (db.StoreBLOB(updateSql, blobArray3)) {
+            success := true
+            method := "Data/Length format"
+        }
+    }
+
+    if (!success) {
+        ; Method 4: Try with Buffer property
+        blobArray4 := [{Buffer: &iconData, Size: bytesRead}]
+        if (db.StoreBLOB(updateSql, blobArray4)) {
+            success := true
+            method := "Buffer format"
+        }
+    }
+
+    if (!success) {
+        ; Method 5: Try array of arrays
+        blobArray5 := [[&iconData, bytesRead]]
+        if (db.StoreBLOB(updateSql, blobArray5)) {
+            success := true
+            method := "Array of arrays format"
+        }
+    }
+
+    if (!success) {
+        ; Method 6: Try object with different structure
+        blobArray6 := [{Ptr: &iconData, Len: bytesRead}]
+        if (db.StoreBLOB(updateSql, blobArray6)) {
+            success := true
+            method := "Ptr/Len format"
+        }
+    }
+
+    if (success) {
+        statusText := "Success: Icon saved (" . bytesRead . " bytes) using " . method
         GuiControl,, StatusText, %statusText%
 
-        iconText := "Yes (Base64: " . StrLen(base64Data) . " chars)"
+        iconText := "Yes (Size: " . bytesRead . " bytes)"
         GuiControl,, IconInDB, %iconText%
 
         ; Update preview
         GuiControl,, CurrentIcon, %iconPath%
-        GuiControl,, IconStatus, Saved to database (Base64)
+        GuiControl,, IconStatus, Saved to database
 
-        MsgBox, 64, Success, Icon successfully saved to database as Base64!
+        MsgBox, 64, Success, Icon successfully saved to database using %method%!
 
-        ; Refresh the game selection to show updated status
+        ; Refresh display
         Gosub, GameSelected
 
     } else {
         errMsg := db.ErrorMsg
-        GuiControl,, StatusText, Error: Failed to save icon to database
-        MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%
+        GuiControl,, StatusText, Error: All BLOB methods failed
+        MsgBox, 16, Database Error, None of the BLOB methods worked:`n%errMsg%`n`nYou may need to change the column type to TEXT for Base64 storage.
     }
-}
-
-; Base64 encoding function
-EncodeBase64String(inputData) {
-    ; Get input size
-    inputSize := StrLen(inputData)
-    if (inputSize = 0)
-        return ""
-
-    ; Calculate required buffer size for Base64
-    DllCall("Crypt32.dll\CryptBinaryToString", "Ptr", &inputData, "UInt", inputSize, "UInt", 0x1, "Ptr", 0, "UIntP", reqSize)
-
-    ; Allocate buffer
-    VarSetCapacity(base64Output, reqSize * 2, 0)
-
-    ; Encode to Base64
-    success := DllCall("Crypt32.dll\CryptBinaryToString", "Ptr", &inputData, "UInt", inputSize, "UInt", 0x1, "Str", base64Output, "UIntP", reqSize)
-
-    if (success) {
-        ; Remove any newlines/carriage returns that Windows might add
-        StringReplace, base64Output, base64Output, `r`n, , All
-        StringReplace, base64Output, base64Output, `r, , All
-        StringReplace, base64Output, base64Output, `n, , All
-        return base64Output
-    }
-
-    return ""
-}
-
-; Base64 decoding function
-DecodeBase64ToFile(base64Data, outputFile) {
-    if (base64Data = "" || outputFile = "")
-        return false
-
-    ; Calculate required buffer size
-    dataSize := StrLen(base64Data)
-    DllCall("Crypt32.dll\CryptStringToBinary", "Str", base64Data, "UInt", dataSize, "UInt", 0x1, "Ptr", 0, "UIntP", reqSize, "Ptr", 0, "Ptr", 0)
-
-    ; Allocate buffer
-    VarSetCapacity(decodedData, reqSize, 0)
-
-    ; Decode Base64
-    success := DllCall("Crypt32.dll\CryptStringToBinary", "Str", base64Data, "UInt", dataSize, "UInt", 0x1, "Ptr", &decodedData, "UIntP", reqSize, "Ptr", 0, "Ptr", 0)
-
-    if (success) {
-        ; Write to file
-        file := FileOpen(outputFile, "w")
-        if (file) {
-            file.RawWrite(decodedData, reqSize)
-            file.Close()
-            return true
-        }
-    }
-
-    return false
 }
 
 DeleteIcon:
@@ -356,7 +344,7 @@ DeleteIcon:
     IfMsgBox, No
         return
 
-    ; Delete from database
+    ; Delete from database - fixed StrReplace for AHK v1
     StringReplace, escapedGameId, CurrentGameId, ', '', All
     sql := "UPDATE games SET IconBlob = NULL WHERE GameId = '" . escapedGameId . "'"
 
