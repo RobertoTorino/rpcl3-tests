@@ -2,9 +2,6 @@
 #NoEnv
 #Include %A_ScriptDir%\tools\SQLiteDB.ahk
 
-; Initialize global data storage
-GameData := {}
-
 db := new SQLiteDB()
 if !db.OpenDB(A_ScriptDir . "\games.db") {
     err := db.ErrorMsg
@@ -127,9 +124,8 @@ ShowArcade:
 return
 
 PopulateResults(result) {
-    ; Clear ListView and data
+    ; Clear ListView
     LV_Delete()
-    GameData := {}
 
     if (result.RowCount = 0) {
         LV_Add("", "", "No results found", "")
@@ -137,41 +133,45 @@ PopulateResults(result) {
         return
     }
 
-    ; Add results to ListView and store data in global object
+    ; Initialize arrays
+    G_GameIds := []
+    G_GameTitles := []
+    G_EbootPaths := []
+    G_IconPaths := []
+    G_PicPaths := []
+    G_FavoriteStatus := []
+
+    ; Add results to ListView and store data
     Loop, % result.RowCount {
         row := ""
         if result.GetRow(A_Index, row) {
-            ; Store data in global object
-            GameData[A_Index] := {}
-            GameData[A_Index].GameId := row[1]
-            GameData[A_Index].GameTitle := row[2]
-            GameData[A_Index].EbootPath := row[3]
-            GameData[A_Index].Favorite := row[6]
+            ; Store data in arrays (1-based indexing)
+            G_GameIds[A_Index] := row[1]
+            G_GameTitles[A_Index] := row[2]
+            G_EbootPaths[A_Index] := row[3]
+            G_FavoriteStatus[A_Index] := row[6]
 
-            ; Construct full paths from script directory
+            ; Construct full paths
             rawIconPath := row[4]
             rawPicPath := row[5]
 
             if (rawIconPath != "") {
                 cleanIconPath := LTrim(rawIconPath, "\/")
-                GameData[A_Index].IconPath := A_ScriptDir . "\" . cleanIconPath
+                G_IconPaths[A_Index] := A_ScriptDir . "\" . cleanIconPath
             } else {
-                GameData[A_Index].IconPath := ""
+                G_IconPaths[A_Index] := ""
             }
 
             if (rawPicPath != "") {
                 cleanPicPath := LTrim(rawPicPath, "\/")
-                GameData[A_Index].PicPath := A_ScriptDir . "\" . cleanPicPath
+                G_PicPaths[A_Index] := A_ScriptDir . "\" . cleanPicPath
             } else {
-                GameData[A_Index].PicPath := ""
+                G_PicPaths[A_Index] := ""
             }
 
             ; Test storage for first row
             if (A_Index = 1) {
-                testId := GameData[1].GameId
-                testTitle := GameData[1].GameTitle
-                testEboot := GameData[1].EbootPath
-                MsgBox, 0, Test Storage, Object test:`nGameId: %testId%`nTitle: %testTitle%`nEboot: %testEboot%
+                MsgBox, 0, Test Array Storage, Array test:`nG_GameIds[1]: %G_GameIds[1]%`nG_GameTitles[1]: %G_GameTitles[1]%`nG_EbootPaths[1]: %G_EbootPaths[1]%
             }
 
             ; Add row to ListView
@@ -199,13 +199,13 @@ ListViewClick:
 return
 
 ShowGameIcon(rowIndex) {
-    if (!GameData.HasKey(rowIndex)) {
+    if (G_IconPaths.MaxIndex() < rowIndex) {
         GuiControl,, GameIcon,
         GuiControl,, ImageStatus, No data for this row
         return
     }
 
-    iconPath := GameData[rowIndex].IconPath
+    iconPath := G_IconPaths[rowIndex]
 
     if (iconPath != "" && FileExist(iconPath)) {
         GuiControl,, GameIcon, %iconPath%
@@ -223,12 +223,12 @@ ShowGameIcon(rowIndex) {
 }
 
 UpdateFavoriteButton(rowIndex) {
-    if (!GameData.HasKey(rowIndex)) {
+    if (G_FavoriteStatus.MaxIndex() < rowIndex) {
         GuiControl,, Button9, Toggle Favorite
         return
     }
 
-    isFavorite := GameData[rowIndex].Favorite
+    isFavorite := G_FavoriteStatus[rowIndex]
     if (isFavorite = 1) {
         GuiControl,, Button9, Remove Favorite
     } else {
@@ -243,13 +243,13 @@ ToggleFavorite:
         return
     }
 
-    if (!GameData.HasKey(selectedRow)) {
+    if (G_GameIds.MaxIndex() < selectedRow) {
         MsgBox, 48, No Data, No data found for selected row.
         return
     }
 
-    gameId := GameData[selectedRow].GameId
-    currentFavorite := GameData[selectedRow].Favorite
+    gameId := G_GameIds[selectedRow]
+    currentFavorite := G_FavoriteStatus[selectedRow]
     newFavorite := (currentFavorite = 1) ? 0 : 1
 
     StringReplace, escapedGameId, gameId, ', '', All
@@ -260,21 +260,21 @@ ToggleFavorite:
         return
     }
 
-    GameData[selectedRow].Favorite := newFavorite
+    G_FavoriteStatus[selectedRow] := newFavorite
     favoriteIcon := (newFavorite = 1) ? "★" : ""
     LV_Modify(selectedRow, Col1, favoriteIcon)
     UpdateFavoriteButton(selectedRow)
 
     statusText := (newFavorite = 1) ? "added to" : "removed from"
-    gameTitle := GameData[selectedRow].GameTitle
+    gameTitle := G_GameTitles[selectedRow]
     MsgBox, 64, Success, %gameTitle% has been %statusText% favorites!
 return
 
 ShowLargeImage:
-    if (CurrentSelectedRow <= 0 || !GameData.HasKey(CurrentSelectedRow))
+    if (CurrentSelectedRow <= 0 || G_PicPaths.MaxIndex() < CurrentSelectedRow)
         return
 
-    picPath := GameData[CurrentSelectedRow].PicPath
+    picPath := G_PicPaths[CurrentSelectedRow]
 
     if (picPath = "" || !FileExist(picPath)) {
         if (picPath != "") {
@@ -309,18 +309,18 @@ LaunchGame:
     }
 
     ; Check if data exists for this row
-    if (!GameData.HasKey(selectedRow)) {
-        MsgBox, 16, No Data, No data found for row %selectedRow%.`nTry refreshing your search.
+    if (G_GameIds.MaxIndex() < selectedRow) {
+        MsgBox, 16, No Data, No data found for row %selectedRow%.`nArray size: %G_GameIds.MaxIndex()%`nTry refreshing your search.
         return
     }
 
-    ; Get game info from global object
-    gameId := GameData[selectedRow].GameId
-    gameTitle := GameData[selectedRow].GameTitle
-    ebootPath := GameData[selectedRow].EbootPath
+    ; Get game info from global arrays
+    gameId := G_GameIds[selectedRow]
+    gameTitle := G_GameTitles[selectedRow]
+    ebootPath := G_EbootPaths[selectedRow]
 
     ; Debug what we retrieved
-    MsgBox, 0, Debug Retrieved, Row: %selectedRow%`nGameId: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
+    MsgBox, 0, Debug Retrieved, Row: %selectedRow%`nArray Size: %G_GameIds.MaxIndex()%`nGameId: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
 
     if (gameId = "") {
         MsgBox, 16, Error, No game ID found for row %selectedRow%.
@@ -347,7 +347,14 @@ ClearSearch:
     GuiControl,, SearchTerm
     LV_Delete()
     ClearImagePreview()
-    GameData := {}
+
+    ; Clear arrays
+    G_GameIds := []
+    G_GameTitles := []
+    G_EbootPaths := []
+    G_IconPaths := []
+    G_PicPaths := []
+    G_FavoriteStatus := []
 return
 
 ResultsListDoubleClick:
@@ -356,5 +363,3 @@ return
 
 GuiClose:
 ExitApp
-
-
