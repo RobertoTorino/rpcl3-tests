@@ -85,8 +85,6 @@ SearchGames:
     GuiControl,, StatusText, %statusText%
 return
 
-
-
 GameSelected:
     Gui, Submit, NoHide
 
@@ -168,9 +166,7 @@ GameSelected:
     }
 
     GuiControl,, StatusText, Game selected: %CurrentGameTitle%
-
 return
-
 
 CleanupPreview:
     Loop, Files, %A_Temp%\preview_icon_*.png
@@ -178,7 +174,6 @@ CleanupPreview:
         FileDelete, %A_LoopFileFullPath%
     }
 return
-
 
 SaveExistingIcon:
     if (CurrentGameId = "") {
@@ -200,7 +195,6 @@ SaveExistingIcon:
     ; Read file and save to database
     SaveIconToDatabase(CurrentIconPath, CurrentGameId, CurrentGameTitle)
 return
-
 
 BrowseAndSaveIcon:
     if (CurrentGameId = "") {
@@ -225,7 +219,6 @@ BrowseAndSaveIcon:
     SaveIconToDatabase(selectedIcon, CurrentGameId, CurrentGameTitle)
 return
 
-
 SaveIconToDatabase(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon to database...
 
@@ -236,6 +229,10 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
         IfMsgBox, No
             return
     }
+
+    ; Prepare SQL first - fixed StrReplace for AHK v1
+    StringReplace, escapedGameId, gameId, ', '', All
+    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
 
     ; Read file into memory
     file := FileOpen(iconPath, "r")
@@ -257,24 +254,18 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
         return
     }
 
-    ; Create BLOB array for SQLite
-    blobArray := [iconData]
+    ; Try different BLOB array formats
+    ; Format 1: Simple array with address and size
+    blobArray := [{Addr: &iconData, Size: bytesRead}]
+
+    ; Debug info
+    MsgBox, 4, Debug, Data size: %bytesRead%`nSQL: %updateSql%`nTry StoreBLOB?
+    IfMsgBox, No
+        return
 
     result := db.StoreBLOB(updateSql, blobArray)
-    MsgBox, Debug Result, StoreBLOB returned: %result%
 
-    if (!result) {
-        errMsg := db.ErrorMsg
-        errCode := db.ErrorCode
-        lastError := db.LastError  ; If available
-        MsgBox, Debug Error, Result: %result%`nCode: %errCode%`nMsg: %errMsg%`nLast: %lastError%
-    }
-
-    ; Update database with BLOB - fixed StrReplace for AHK v1
-    StringReplace, escapedGameId, gameId, ', '', All
-    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
-
-    if (db.StoreBLOB(updateSql, blobArray)) {
+    if (result) {
         statusText := "Success: Icon saved to database (" . bytesRead . " bytes)"
         GuiControl,, StatusText, %statusText%
 
@@ -288,12 +279,67 @@ SaveIconToDatabase(iconPath, gameId, gameTitle) {
         MsgBox, 64, Success, Icon successfully saved to database!
 
     } else {
+        ; If first method fails, try alternative approaches
+
+        ; Method 2: Try with just the data
+        blobArray2 := [iconData]
+        result2 := db.StoreBLOB(updateSql, blobArray2)
+
+        if (result2) {
+            statusText := "Success: Icon saved to database (" . bytesRead . " bytes) - Method 2"
+            GuiControl,, StatusText, %statusText%
+            iconText := "Yes (Size: " . bytesRead . " bytes)"
+            GuiControl,, IconInDB, %iconText%
+            GuiControl,, CurrentIcon, %iconPath%
+            GuiControl,, IconStatus, Saved to database
+            MsgBox, 64, Success, Icon successfully saved to database!
+            return
+        }
+
+        ; Method 3: Try using regular Exec with binary data
+        ; This might work if StoreBLOB is not properly implemented
+        VarSetCapacity(binaryData, bytesRead)
+        DllCall("RtlMoveMemory", "Ptr", &binaryData, "Ptr", &iconData, "UInt", bytesRead)
+
+        ; Convert to Base64 as last resort
+        base64 := EncodeBase64(&iconData, bytesRead)
+        if (base64 != "") {
+            base64Sql := "UPDATE games SET IconBlob = '" . base64 . "' WHERE GameId = '" . escapedGameId . "'"
+            result3 := db.Exec(base64Sql)
+
+            if (result3) {
+                statusText := "Success: Icon saved as Base64 (" . bytesRead . " bytes)"
+                GuiControl,, StatusText, %statusText%
+                iconText := "Yes (Base64 - Size: " . bytesRead . " bytes)"
+                GuiControl,, IconInDB, %iconText%
+                GuiControl,, CurrentIcon, %iconPath%
+                GuiControl,, IconStatus, Saved to database (Base64)
+                MsgBox, 64, Success, Icon successfully saved to database as Base64!
+                return
+            }
+        }
+
+        ; If all methods fail, show error
         errMsg := db.ErrorMsg
         GuiControl,, StatusText, Error: Failed to save icon to database
-        MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%
+        MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%`n`nTried multiple methods but all failed.
     }
 }
 
+; Base64 encoding function for fallback
+EncodeBase64(pData, dataSize) {
+    ; Calculate required buffer size
+    DllCall("Crypt32.dll\CryptBinaryToString", "Ptr", pData, "UInt", dataSize, "UInt", 1, "Ptr", 0, "UIntP", reqSize)
+
+    ; Allocate buffer
+    VarSetCapacity(base64, reqSize * 2)
+
+    ; Encode to Base64
+    if DllCall("Crypt32.dll\CryptBinaryToString", "Ptr", pData, "UInt", dataSize, "UInt", 1, "Str", base64, "UIntP", reqSize) {
+        return base64
+    }
+    return ""
+}
 
 DeleteIcon:
     if (CurrentGameId = "") {
@@ -333,12 +379,11 @@ DeleteIcon:
     }
 return
 
-db.CloseDB()
-
 GuiClose:
     ; Cleanup any temp files
     Loop, Files, %A_Temp%\preview_icon_*.png
     {
         FileDelete, %A_LoopFileFullPath%
     }
+    db.CloseDB()
 ExitApp
