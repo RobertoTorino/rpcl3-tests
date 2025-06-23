@@ -2,6 +2,8 @@
 #NoEnv
 #Include %A_ScriptDir%\tools\SQLiteDB.ahk
 
+
+
 ; Global array declarations - ADD THIS SECTION
 Global G_GameIds := []
 Global G_GameTitles := []
@@ -19,11 +21,11 @@ if !db.OpenDB(A_ScriptDir . "\games.db") {
     ExitApp
 }
 
-; Update total game count on startup - ADD THIS LINE
-UpdateTotalGameCount()
 
 ; Create integrated GUI
 Gui, Font, s10, Segoe UI
+
+
 
 ; Quick access buttons section
 Gui, Add, GroupBox, x10 y10 w380 h60, Quick Access
@@ -41,12 +43,13 @@ Gui, Add, Button, gSearch x310 y97 w70 h23, Search
 
 ; Results section - ListView with favorite star column
 Gui, Add, GroupBox, x10 y150 w380 h220, Results
-Gui, Add, ListView, vResultsList x20 y170 w360 h170 Grid -Multi AltSubmit gListViewClick, ★|Game ID|Title
+Gui, Add, ListView, vResultsList x20 y170 w360 h170 Grid -Multi AltSubmit gListViewClick, *|Game ID|Title
 LV_ModifyCol(1, 25)  ; Star column
 LV_ModifyCol(2, 80)  ; Game ID
 LV_ModifyCol(3, 255) ; Title
 
 Gui, Add, Text, vTotalGamesCounter x310 y32 w70 h16 +Right, Total: 0
+UpdateTotalGameCount()
 
 ; Image preview section
 Gui, Add, GroupBox, x10 y380 w380 h100, Game Preview
@@ -60,6 +63,7 @@ Gui, Add, Button, gClearSearch x290 y400 w80 h30, Clear
 
 Gui, Show, w400 h490, Game Search Launcher
 return
+
 
 UpdateTotalGameCount() {
     Global db
@@ -106,7 +110,6 @@ Search:
     PopulateResults(result)
 return
 
-
 ShowAll:
     sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games ORDER BY GameTitle LIMIT 50"
 
@@ -129,7 +132,6 @@ ShowFavorites:
     PopulateResults(result)
 return
 
-
 ShowPlayed:
     sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games WHERE Played = 1 ORDER BY GameTitle LIMIT 50"
 
@@ -141,7 +143,6 @@ ShowPlayed:
     PopulateResults(result)
 return
 
-
 ShowPSN:
     sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games WHERE PSN = 1 ORDER BY GameTitle LIMIT 50"
 
@@ -152,7 +153,6 @@ ShowPSN:
 
     PopulateResults(result)
 return
-
 
 ShowArcade:
     sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games WHERE ArcadeGame = 1 ORDER BY GameTitle LIMIT 50"
@@ -221,7 +221,7 @@ PopulateResults(result) {
             }
 
             ; Add row to ListView
-            favoriteIcon := (row[6] = 1) ? "★" : ""
+            favoriteIcon := (row[6] = 1) ? "*" : ""
             LV_Add("", favoriteIcon, row[1], row[2])
         }
     }
@@ -317,7 +317,7 @@ ToggleFavorite:
     }
 
     G_FavoriteStatus[selectedRow] := newFavorite
-    favoriteIcon := (newFavorite = 1) ? "★" : ""
+    favoriteIcon := (newFavorite = 1) ? "*" : ""
     LV_Modify(selectedRow, Col1, favoriteIcon)
     UpdateFavoriteButton(selectedRow)
 
@@ -434,11 +434,9 @@ ClearSearch:
     G_FavoriteStatus := []
 return
 
-
 ResultsListDoubleClick:
     Gosub, LaunchGame
 return
-
 
 GuiClose:
 ExitApp
