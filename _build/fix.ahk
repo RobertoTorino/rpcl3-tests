@@ -2,12 +2,25 @@
 #NoEnv
 #Include %A_ScriptDir%\tools\SQLiteDB.ahk
 
+; Global array declarations - ADD THIS SECTION
+Global G_GameIds := []
+Global G_GameTitles := []
+Global G_EbootPaths := []
+Global G_IconPaths := []
+Global G_PicPaths := []
+Global G_FavoriteStatus := []
+Global CurrentSelectedRow := 0
+
+
 db := new SQLiteDB()
 if !db.OpenDB(A_ScriptDir . "\games.db") {
     err := db.ErrorMsg
     MsgBox, 16, DB Error, Failed to open DB.`n%err%
     ExitApp
 }
+
+; Update total game count on startup - ADD THIS LINE
+UpdateTotalGameCount()
 
 ; Create integrated GUI
 Gui, Font, s10, Segoe UI
@@ -33,6 +46,8 @@ LV_ModifyCol(1, 25)  ; Star column
 LV_ModifyCol(2, 80)  ; Game ID
 LV_ModifyCol(3, 255) ; Title
 
+Gui, Add, Text, vTotalGamesCounter x310 y32 w70 h16 +Right, Total: 0
+
 ; Image preview section
 Gui, Add, GroupBox, x10 y380 w380 h100, Game Preview
 Gui, Add, Picture, vGameIcon x20 y400 w64 h64 gShowLargeImage, ; Small icon preview
@@ -45,6 +60,29 @@ Gui, Add, Button, gClearSearch x290 y400 w80 h30, Clear
 
 Gui, Show, w400 h490, Game Search Launcher
 return
+
+UpdateTotalGameCount() {
+    Global db
+    ; Query to count total games in database
+    sql := "SELECT COUNT(*) FROM games"
+
+    if !db.GetTable(sql, result) {
+        ; If query fails, just show 0
+        GuiControl,, TotalGamesCounter, Total: 0
+        return
+    }
+    ; Extract the count from result
+    totalCount := 0
+    if (result.RowCount > 0) {
+        row := ""
+        if result.GetRow(1, row) {
+            totalCount := row[1]
+        }
+    }
+    ; Update the display
+    GuiControl,, TotalGamesCounter, Total: %totalCount%
+}
+
 
 Search:
     Gui, Submit, NoHide
@@ -68,6 +106,7 @@ Search:
     PopulateResults(result)
 return
 
+
 ShowAll:
     sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games ORDER BY GameTitle LIMIT 50"
 
@@ -90,6 +129,7 @@ ShowFavorites:
     PopulateResults(result)
 return
 
+
 ShowPlayed:
     sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games WHERE Played = 1 ORDER BY GameTitle LIMIT 50"
 
@@ -100,6 +140,7 @@ ShowPlayed:
 
     PopulateResults(result)
 return
+
 
 ShowPSN:
     sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games WHERE PSN = 1 ORDER BY GameTitle LIMIT 50"
@@ -112,6 +153,7 @@ ShowPSN:
     PopulateResults(result)
 return
 
+
 ShowArcade:
     sql := "SELECT GameId, GameTitle, Eboot, Icon0, Pic1, Favorite FROM games WHERE ArcadeGame = 1 ORDER BY GameTitle LIMIT 50"
 
@@ -123,17 +165,26 @@ ShowArcade:
     PopulateResults(result)
 return
 
+
 PopulateResults(result) {
+    ; Make sure we're working with global arrays
+    Global G_GameIds, G_GameTitles, G_EbootPaths, G_IconPaths, G_PicPaths, G_FavoriteStatus
+
     ; Clear ListView
     LV_Delete()
 
-    if (result.RowCount = 0) {
+    ; Extract result row count first
+    resultRowCount := result.RowCount
+
+    if (resultRowCount = 0) {
         LV_Add("", "", "No results found", "")
+        ; Update counter to show 0 games
+        GuiControl,, GameCounter, Games: 0
         ClearImagePreview()
         return
     }
 
-    ; Initialize arrays
+    ; Clear and reinitialize arrays
     G_GameIds := []
     G_GameTitles := []
     G_EbootPaths := []
@@ -142,7 +193,7 @@ PopulateResults(result) {
     G_FavoriteStatus := []
 
     ; Add results to ListView and store data
-    Loop, % result.RowCount {
+    Loop, %resultRowCount% {
         row := ""
         if result.GetRow(A_Index, row) {
             ; Store data in arrays (1-based indexing)
@@ -169,16 +220,18 @@ PopulateResults(result) {
                 G_PicPaths[A_Index] := ""
             }
 
-            ; Test storage for first row
-            if (A_Index = 1) {
-                MsgBox, 0, Test Array Storage, Array test:`nG_GameIds[1]: %G_GameIds[1]%`nG_GameTitles[1]: %G_GameTitles[1]%`nG_EbootPaths[1]: %G_EbootPaths[1]%
-            }
-
             ; Add row to ListView
             favoriteIcon := (row[6] = 1) ? "★" : ""
             LV_Add("", favoriteIcon, row[1], row[2])
         }
     }
+
+    ; Update game counter display
+    gameCount := G_GameIds.MaxIndex()
+    if (gameCount = "") {
+        gameCount := 0
+    }
+    GuiControl,, GameCounter, Games: %gameCount%
 
     ; Auto-resize columns
     LV_ModifyCol(1, 25)
@@ -187,6 +240,7 @@ PopulateResults(result) {
 
     ClearImagePreview()
 }
+
 
 ListViewClick:
     selectedRow := LV_GetNext()
@@ -222,6 +276,7 @@ ShowGameIcon(rowIndex) {
     }
 }
 
+
 UpdateFavoriteButton(rowIndex) {
     if (G_FavoriteStatus.MaxIndex() < rowIndex) {
         GuiControl,, Button9, Toggle Favorite
@@ -235,6 +290,7 @@ UpdateFavoriteButton(rowIndex) {
         GuiControl,, Button9, Add Favorite
     }
 }
+
 
 ToggleFavorite:
     selectedRow := LV_GetNext()
@@ -270,6 +326,7 @@ ToggleFavorite:
     MsgBox, 64, Success, %gameTitle% has been %statusText% favorites!
 return
 
+
 ShowLargeImage:
     if (CurrentSelectedRow <= 0 || G_PicPaths.MaxIndex() < CurrentSelectedRow)
         return
@@ -290,6 +347,7 @@ ShowLargeImage:
     Gui, 2: Show, w600 h400
 return
 
+
 2GuiClose:
     Gui, 2: Destroy
 return
@@ -301,16 +359,31 @@ ClearImagePreview() {
     CurrentSelectedRow := 0
 }
 
+
 LaunchGame:
+    ; Make sure we can access global arrays
+    Global G_GameIds, G_GameTitles, G_EbootPaths
+
     selectedRow := LV_GetNext()
     if (!selectedRow) {
         MsgBox, 48, No Selection, Please select a game from the list.
         return
     }
 
-    ; Check if data exists for this row
-    if (G_GameIds.MaxIndex() < selectedRow) {
-        MsgBox, 16, No Data, No data found for row %selectedRow%.`nArray size: %G_GameIds.MaxIndex()%`nTry refreshing your search.
+    ; Debug: Check array status first
+    G_GameIds_MaxIndex := G_GameIds.MaxIndex()
+    G_GameTitles_MaxIndex := G_GameTitles.MaxIndex()
+    G_EbootPaths_MaxIndex := G_EbootPaths.MaxIndex()
+
+    ; Check if G_GameIds exists (will be blank if undefined)
+    arrayExists := (G_GameIds_MaxIndex != "") ? "Yes" : "No"
+
+    ; Show debug info about arrays
+    MsgBox, 0, Array Debug, Selected Row: %selectedRow%`nG_GameIds MaxIndex: %G_GameIds_MaxIndex%`nG_GameTitles MaxIndex: %G_GameTitles_MaxIndex%`nG_EbootPaths MaxIndex: %G_EbootPaths_MaxIndex%`nArrays Exist: %arrayExists%
+
+    ; Check if arrays exist and have data
+    if (G_GameIds_MaxIndex = "" || G_GameIds_MaxIndex < selectedRow) {
+        MsgBox, 16, No Data, Arrays not populated or insufficient data.`nSelected Row: %selectedRow%`nArray Size: %G_GameIds_MaxIndex%`n`nPlease perform a search first to populate the data.
         return
     }
 
@@ -320,7 +393,7 @@ LaunchGame:
     ebootPath := G_EbootPaths[selectedRow]
 
     ; Debug what we retrieved
-    MsgBox, 0, Debug Retrieved, Row: %selectedRow%`nArray Size: %G_GameIds.MaxIndex()%`nGameId: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
+    MsgBox, 0, Debug Retrieved, Row: %selectedRow%`nArray Size: %G_GameIds_MaxIndex%`nGameId: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
 
     if (gameId = "") {
         MsgBox, 16, Error, No game ID found for row %selectedRow%.
@@ -343,10 +416,14 @@ LaunchGame:
     }
 return
 
+
 ClearSearch:
     GuiControl,, SearchTerm
     LV_Delete()
     ClearImagePreview()
+
+    ; Reset game counter
+    GuiControl,, GameCounter, Games: 0
 
     ; Clear arrays
     G_GameIds := []
@@ -357,9 +434,11 @@ ClearSearch:
     G_FavoriteStatus := []
 return
 
+
 ResultsListDoubleClick:
     Gosub, LaunchGame
 return
+
 
 GuiClose:
 ExitApp
