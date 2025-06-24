@@ -18,37 +18,39 @@ FileCreateDir, %IconsFolder%
 Gui, Font, s10, Segoe UI
 
 ; Search/Select Game section
-Gui, Add, GroupBox, x10 y10 w480 h100, Select Game
+Gui, Add, GroupBox, x10 y10 w480 h130, Select Game
 Gui, Add, Text, x20 y30, Search game:
 Gui, Add, Edit, vSearchTerm x20 y50 w200 h20
 Gui, Add, Button, gSearchGames x230 y50 w60 h20, Search
+Gui, Add, Button, gShowAllGames x300 y50 w80 h20, Show All Games
 Gui, Add, ComboBox, vGameSelect x20 y75 w400 h200 gGameSelected, Select a game...
+Gui, Add, Button, gShowGameList x20 y105 w150 h20, Show Full Game List
 
 ; Current Game Info section
-Gui, Add, GroupBox, x10 y120 w480 h120, Current Game Info
-Gui, Add, Text, x20 y140, Selected Game:
-Gui, Add, Text, vSelectedGame x20 y155 w450 h20, None selected
-Gui, Add, Text, x20 y175, Current Icon Path:
-Gui, Add, Text, vCurrentIconPath x20 y190 w450 h20, -
-Gui, Add, Text, x20 y205, Icon in rpcs3_icons:
-Gui, Add, Text, vIconInFolder x20 y220 w100 h20, Checking...
+Gui, Add, GroupBox, x10 y150 w480 h120, Current Game Info
+Gui, Add, Text, x20 y170, Selected Game:
+Gui, Add, Text, vSelectedGame x20 y185 w450 h20, None selected
+Gui, Add, Text, x20 y205, Current Icon Path:
+Gui, Add, Text, vCurrentIconPath x20 y220 w450 h20, -
+Gui, Add, Text, x20 y235, Icon in rpcs3_icons:
+Gui, Add, Text, vIconInFolder x20 y250 w200 h20, Checking...
 
 ; Icon Preview section
-Gui, Add, GroupBox, x10 y250 w240 h150, Current Icon Preview
-Gui, Add, Picture, vCurrentIcon x20 y270 w220 h100,
-Gui, Add, Text, vIconStatus x20 y375 w200 h20, No icon loaded
+Gui, Add, GroupBox, x10 y280 w240 h150, Current Icon Preview
+Gui, Add, Picture, vCurrentIcon x20 y300 w220 h100,
+Gui, Add, Text, vIconStatus x20 y405 w200 h20, No icon loaded
 
 ; Icon Actions section
-Gui, Add, GroupBox, x260 y250 w230 h150, Icon Actions
-Gui, Add, Button, gCopyExistingIcon x270 y270 w200 h30, Copy Existing Icon to Folder
-Gui, Add, Button, gBrowseAndCopyIcon x270 y310 w200 h30, Browse & Copy New Icon
-Gui, Add, Button, gDeleteIconFromFolder x270 y350 w200 h30, Delete Icon from Folder
+Gui, Add, GroupBox, x260 y280 w230 h150, Icon Actions
+Gui, Add, Button, gCopyExistingIcon x270 y300 w200 h30, Copy Existing Icon to Folder
+Gui, Add, Button, gBrowseAndCopyIcon x270 y340 w200 h30, Browse & Copy New Icon
+Gui, Add, Button, gDeleteIconFromFolder x270 y380 w200 h30, Delete Icon from Folder
 
 ; Progress section
-Gui, Add, GroupBox, x10 y410 w480 h80, Status
-Gui, Add, Text, vStatusText x20 y430 w450 h40, Ready. Select a game to manage its icon.
+Gui, Add, GroupBox, x10 y440 w480 h80, Status
+Gui, Add, Text, vStatusText x20 y460 w450 h40, Ready. Select a game to manage its icon.
 
-Gui, Show, w500 h500, Icon Manager
+Gui, Show, w500 h530, Icon Manager
 return
 
 SearchGames:
@@ -89,6 +91,107 @@ SearchGames:
     GuiControl,, StatusText, %statusText%
 return
 
+ShowAllGames:
+    ; Load all games into the combo box
+    sql := "SELECT GameId, GameTitle FROM games ORDER BY GameTitle"
+
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, Failed to load all games
+        return
+    }
+
+    ; Clear and populate combo box
+    GuiControl,, GameSelect, |Select a game...
+
+    if (result.RowCount = 0) {
+        GuiControl,, StatusText, No games found in database
+        return
+    }
+
+    ; Add all games to combo box
+    Loop, % result.RowCount {
+        row := ""
+        if result.GetRow(A_Index, row) {
+            gameEntry := row[1] . " - " . row[2]
+            GuiControl,, GameSelect, %gameEntry%
+        }
+    }
+
+    statusText := "Loaded " . result.RowCount . " games. Select one from the dropdown."
+    GuiControl,, StatusText, %statusText%
+return
+
+ShowGameList:
+    ; Create a new window with full game list
+    Gui, GameList:New, +Resize, Game List
+    Gui, GameList:Font, s10, Segoe UI
+
+    ; Get all games
+    sql := "SELECT GameId, GameTitle FROM games ORDER BY GameTitle"
+    if !db.GetTable(sql, result) {
+        MsgBox, 16, Query Error, Failed to load games for list
+        return
+    }
+
+    ; Create listview
+    Gui, GameList:Add, Text, x10 y10, Select a game to view its icon:
+    Gui, GameList:Add, ListView, x10 y30 w600 h400 gGameListSelect vGameListView, Game ID|Game Title
+
+    ; Add preview area
+    Gui, GameList:Add, GroupBox, x620 y10 w200 h300, Icon Preview
+    Gui, GameList:Add, Picture, x630 y30 w180 h180 vGameListIcon
+    Gui, GameList:Add, Text, x630 y220 w180 h20 vGameListIconStatus, No game selected
+    Gui, GameList:Add, Text, x630 y240 w180 h60 vGameListIconPath,
+
+    ; Add games to listview
+    Loop, % result.RowCount {
+        row := ""
+        if result.GetRow(A_Index, row) {
+            gameId := row[1]
+            gameTitle := row[2]
+            LV_Add("", gameId, gameTitle)
+        }
+    }
+
+    ; Auto-size columns
+    LV_ModifyCol(1, "AutoHdr")
+    LV_ModifyCol(2, "AutoHdr")
+
+    ; Show the window
+    Gui, GameList:Show, w830 h450
+return
+
+GameListSelect:
+    if (A_GuiEvent = "Normal") {
+        ; Get selected game
+        selectedRow := LV_GetNext()
+        if (selectedRow = 0)
+            return
+
+        ; Get game info
+        LV_GetText(selectedGameId, selectedRow, 1)
+        LV_GetText(selectedGameTitle, selectedRow, 2)
+
+        ; Check for icon in rpcs3_icons folder
+        iconPath := IconsFolder . "\" . selectedGameId . ".PNG"
+
+        if FileExist(iconPath) {
+            FileGetSize, iconSize, %iconPath%
+            GuiControl, GameList:, GameListIcon, %iconPath%
+            GuiControl, GameList:, GameListIconStatus, Found (%iconSize% bytes)
+            GuiControl, GameList:, GameListIconPath, %iconPath%
+        } else {
+            GuiControl, GameList:, GameListIcon,
+            GuiControl, GameList:, GameListIconStatus, No icon in rpcs3_icons
+            GuiControl, GameList:, GameListIconPath, Looking for: %iconPath%
+        }
+    }
+return
+
+GameListGuiClose:
+    Gui, GameList:Destroy
+return
+
 GameSelected:
     Gui, Submit, NoHide
 
@@ -127,8 +230,8 @@ GameSelected:
         CurrentIconPath := ""
     }
 
-    ; Check for icon in rpcs3_icons folder
-    IconInFolder := IconsFolder . "\" . CurrentGameId . ".png"
+    ; Check for icon in rpcs3_icons folder (with uppercase .PNG)
+    IconInFolder := IconsFolder . "\" . CurrentGameId . ".PNG"
 
     ; Update GUI
     GuiControl,, SelectedGame, %CurrentGameId% - %CurrentGameTitle%
@@ -136,7 +239,8 @@ GameSelected:
 
     ; Check if icon exists in rpcs3_icons folder
     if FileExist(IconInFolder) {
-        GuiControl,, IconInFolder, Yes
+        FileGetSize, iconSize, %IconInFolder%
+        GuiControl,, IconInFolder, Yes (%iconSize% bytes)
         GuiControl,, CurrentIcon, %IconInFolder%
         GuiControl,, IconStatus, From rpcs3_icons folder
     } else {
@@ -173,7 +277,7 @@ CopyExistingIcon:
     }
 
     ; Confirm action
-    MsgBox, 4, Confirm Copy, Copy the existing icon file to rpcs3_icons folder?`n`nFrom: %CurrentIconPath%`nTo: %CurrentGameId%.png`nGame: %CurrentGameTitle%
+    MsgBox, 4, Confirm Copy, Copy the existing icon file to rpcs3_icons folder?`n`nFrom: %CurrentIconPath%`nTo: %CurrentGameId%.PNG`nGame: %CurrentGameTitle%
 
     IfMsgBox, No
         return
@@ -195,7 +299,7 @@ BrowseAndCopyIcon:
     }
 
     ; Confirm action
-    MsgBox, 4, Confirm Copy, Copy this icon to rpcs3_icons folder?`n`nFrom: %selectedIcon%`nTo: %CurrentGameId%.png`nGame: %CurrentGameTitle%
+    MsgBox, 4, Confirm Copy, Copy this icon to rpcs3_icons folder?`n`nFrom: %selectedIcon%`nTo: %CurrentGameId%.PNG`nGame: %CurrentGameTitle%
 
     IfMsgBox, No
         return
@@ -206,27 +310,47 @@ return
 CopyIconToFolder(sourcePath, gameId, gameTitle) {
     GuiControl,, StatusText, Copying icon to rpcs3_icons folder...
 
-    ; Create destination path
-    destPath := IconsFolder . "\" . gameId . ".png"
+    ; Create destination path with uppercase .PNG extension
+    destPath := IconsFolder . "\" . gameId . ".PNG"
+
+    ; Make sure the destination folder exists
+    FileCreateDir, %IconsFolder%
+
+    ; Delete destination if it exists to ensure clean copy
+    if FileExist(destPath) {
+        FileDelete, %destPath%
+    }
 
     ; Copy the file
     FileCopy, %sourcePath%, %destPath%, 1  ; 1 = overwrite existing
 
+    ; Check if copy was successful
     if (ErrorLevel) {
         GuiControl,, StatusText, Error: Failed to copy icon file
-        MsgBox, 16, Copy Error, Failed to copy icon file to:`n%destPath%`n`nError: %ErrorLevel%
+        MsgBox, 16, Copy Error, Failed to copy icon file`nSource: %sourcePath%`nDestination: %destPath%`nErrorLevel: %ErrorLevel%
         return
     }
 
+    ; Verify the file was actually copied
+    if !FileExist(destPath) {
+        GuiControl,, StatusText, Error: File copy reported success but file not found
+        MsgBox, 16, Copy Verification Failed, Copy reported success but destination file not found:`n%destPath%
+        return
+    }
+
+    ; Get file sizes to verify copy
+    FileGetSize, sourceSize, %sourcePath%
+    FileGetSize, destSize, %destPath%
+
     ; Success
-    statusText := "Success: Icon copied to " . gameId . ".png"
+    statusText := "Success: Icon copied to " . gameId . ".PNG (" . destSize . " bytes)"
     GuiControl,, StatusText, %statusText%
 
-    GuiControl,, IconInFolder, Yes
+    GuiControl,, IconInFolder, Yes (%destSize% bytes)
     GuiControl,, CurrentIcon, %destPath%
     GuiControl,, IconStatus, Copied to rpcs3_icons folder
 
-    MsgBox, 64, Success, Icon successfully copied to rpcs3_icons folder as %gameId%.png!
+    MsgBox, 64, Success, Icon successfully copied to rpcs3_icons folder as %gameId%.PNG!
 
     ; Refresh display
     Gosub, GameSelected
@@ -238,8 +362,8 @@ DeleteIconFromFolder:
         return
     }
 
-    ; Check if icon exists in folder
-    IconInFolder := IconsFolder . "\" . CurrentGameId . ".png"
+    ; Check if icon exists in folder (uppercase .PNG)
+    IconInFolder := IconsFolder . "\" . CurrentGameId . ".PNG"
     if !FileExist(IconInFolder) {
         MsgBox, 48, No Icon, No icon found in rpcs3_icons folder for this game.
         return
@@ -274,32 +398,8 @@ DeleteIconFromFolder:
     }
 
     MsgBox, 64, Success, Icon deleted from rpcs3_icons folder
-
-    ; Refresh display
-    Gosub, GameSelected
 return
 
 GuiClose:
     db.CloseDB()
 ExitApp
-
-
----------------------------
-Confirm Copy
----------------------------
-Copy this icon to rpcs3_icons folder?
-
-From: E:\TEKKEN-TAG-TOURNAMENT-2-TEST-ENV\games\Ridge Racer 7 [BLUS30001]\PS3_GAME\ICON0.PNG
-To: BLUS30001.png
-Game: Ridge Racer 7
----------------------------
-Yes   No
----------------------------
----------------------------
-Success
----------------------------
-Icon successfully copied to rpcs3_icons folder as BLUS30001.png!
----------------------------
-OK
----------------------------
-
