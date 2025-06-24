@@ -81,6 +81,8 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
         }
     }
 }
+
+
 And the simple test function:
 
 ; Add this button to your GUI for testing
@@ -123,3 +125,38 @@ The key AHK v1 syntax fixes:
 Removed parentheses around conditions in if statements
 Used proper IfMsgBox syntax
 Fixed variable references in MsgBox
+
+
+
+---------------------------
+Debug SQL
+---------------------------
+SQL Preview: UPDATE games SET IconBlob = X'Կ9ҫE×DØA000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000...
+
+Hex length: 200
+Test data length: 100
+
+Proceed?
+---------------------------
+Yes   No
+---------------------------
+
+---------------------------
+Exec Result
+---------------------------
+Result:
+ErrorMsg:
+ErrorCode:
+Changes:
+---------------------------
+OK
+---------------------------
+---------------------------
+Database Error
+---------------------------
+HEX method failed with no specific error message
+---------------------------
+OK
+---------------------------
+
+
