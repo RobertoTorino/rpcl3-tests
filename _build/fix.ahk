@@ -89,11 +89,23 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
         MsgBox, 16, Database Error, Update failed:`nError: %errMsg%`nCode: %errCode%
     }
 }
-```
 
-This will help us identify:
-1. Whether the game ID actually exists in the database
-2. What the exact WHERE clause looks like
-3. Whether there's a mismatch in the game ID format
 
-Try this and let me know what the messages show - especially whether it finds the game in the first check and what the WHERE clause looks like.
+---------------------------
+Confirm Save
+---------------------------
+Save this icon to database using HEX method?
+
+File: E:\TEKKEN-TAG-TOURNAMENT-2-TEST-ENV\games\Ridge Racer 7 [BLUS30001]\PS3_GAME\ICON0.PNG
+Game: Ridge Racer 7
+---------------------------
+Yes   No
+---------------------------
+---------------------------
+Query Error
+---------------------------
+Could not verify game exists
+---------------------------
+OK
+---------------------------
+
