@@ -1,114 +1,94 @@
-The issue is that the GetTable method is failing. Let's simplify this and use a method that we know works (since your main search functionality works). Let me fix this:
-
 SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
-    GuiControl,, StatusText, Saving icon as HEX...
+    GuiControl,, StatusText, Testing UPDATE mechanism...
 
-    ; Read file and convert to hex
-    FileGetSize, fileSize, %iconPath%
-    if (ErrorLevel) {
-        MsgBox, 16, File Error, Could not get file size: %iconPath%
-        return
-    }
+    ; First, let's test if UPDATE works at all with simple text
+    StringReplace, escapedGameId, gameId, ', '', All
+    testUpdateSql := "UPDATE games SET Icon0 = 'TEST_UPDATE_" . A_TickCount . "' WHERE GameId = '" . escapedGameId . "'"
 
-    file := FileOpen(iconPath, "r")
-    if (!file) {
-        MsgBox, 16, File Error, Could not open file: %iconPath%
-        return
-    }
-
-    ; For testing, read only first 50 bytes
-    testSize := (fileSize > 50) ? 50 : fileSize
-
-    ; Read bytes and convert to proper hex
-    hexString := ""
-    Loop, %testSize% {
-        byte := file.ReadUChar()
-
-        hex1 := byte // 16
-        hex2 := Mod(byte, 16)
-
-        hexDigits := "0123456789ABCDEF"
-        hexChar1 := SubStr(hexDigits, hex1 + 1, 1)
-        hexChar2 := SubStr(hexDigits, hex2 + 1, 1)
-
-        hexString .= hexChar1 . hexChar2
-    }
-
-    file.Close()
-
-    ; Create SQL - let's try without escaping first
-    updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . gameId . "'"
-
-    ; Show debug info
-    MsgBox, 4, Debug Info, GameId: %gameId%`nGameTitle: %gameTitle%`nHex length: %StrLen(hexString)%`n`nSQL: %updateSql%`n`nProceed?
+    MsgBox, 4, Test UPDATE, First test simple UPDATE:`n%testUpdateSql%`n`nProceed?
     IfMsgBox, No
         return
 
-    GuiControl,, StatusText, Executing SQL update...
+    result1 := db.Exec(testUpdateSql)
+    changes1 := db.Changes
+    errMsg1 := db.ErrorMsg
 
-    ; Execute the update
-    result := db.Exec(updateSql)
-    changes := db.Changes
-    errMsg := db.ErrorMsg
-    errCode := db.ErrorCode
+    MsgBox, 0, Simple UPDATE Result, Result: %result1%`nChanges: %changes1%`nError: %errMsg1%
 
-    ; Show all results
-    MsgBox, 0, Exec Results, Result: %result%`nChanges: %changes%`nErrorMsg: %errMsg%`nErrorCode: %errCode%
+    if (changes1 = 0) {
+        MsgBox, 16, UPDATE Failed, Even simple UPDATE failed - there might be a fundamental issue
+        return
+    }
 
-    ; Try to determine success differently - check if we have a real result value
-    if (result = 1 || result = true || (errMsg = "" && errCode = 0)) {
-        if (changes > 0) {
-            GuiControl,, StatusText, SUCCESS: %changes% row(s) updated with HEX data
-            MsgBox, 64, Success, Icon saved successfully! %changes% row(s) updated.
-            Gosub, GameSelected
-        } else {
-            ; Even if changes=0, if no error occurred, the SQL was valid
-            MsgBox, 48, Warning, SQL executed without error but 0 rows updated.`nThis might mean the GameId doesn't match exactly.`n`nTry refreshing the game selection and try again.
-        }
+    ; Now let's try updating IconBlob with NULL first
+    nullUpdateSql := "UPDATE games SET IconBlob = NULL WHERE GameId = '" . escapedGameId . "'"
+
+    MsgBox, 4, Test NULL UPDATE, Now test NULL UPDATE to IconBlob:`n%nullUpdateSql%`n`nProceed?
+    IfMsgBox, No
+        return
+
+    result2 := db.Exec(nullUpdateSql)
+    changes2 := db.Changes
+    errMsg2 := db.ErrorMsg
+
+    MsgBox, 0, NULL UPDATE Result, Result: %result2%`nChanges: %changes2%`nError: %errMsg2%
+
+    if (changes2 = 0) {
+        MsgBox, 16, BLOB UPDATE Failed, Cannot update IconBlob column - might be a column issue
+        return
+    }
+
+    ; Now try with very simple hex data
+    simpleHexSql := "UPDATE games SET IconBlob = X'48656C6C6F' WHERE GameId = '" . escapedGameId . "'"
+
+    MsgBox, 4, Test Simple HEX, Now test simple HEX (Hello):`n%simpleHexSql%`n`nProceed?
+    IfMsgBox, No
+        return
+
+    result3 := db.Exec(simpleHexSql)
+    changes3 := db.Changes
+    errMsg3 := db.ErrorMsg
+
+    MsgBox, 0, Simple HEX Result, Result: %result3%`nChanges: %changes3%`nError: %errMsg3%
+
+    if (changes3 > 0) {
+        MsgBox, 64, HEX Works!, Simple HEX update worked! Now we can try with real icon data.
+        Gosub, GameSelected  ; Refresh to see the change
     } else {
-        MsgBox, 16, Database Error, Update failed:`nResult: %result%`nError: %errMsg%`nCode: %errCode%
+        MsgBox, 16, HEX Failed, Even simple HEX failed - HEX syntax might not be supported by your SQLite version
+
+        ; Let's try alternative approach - insert as text
+        MsgBox, 4, Try Base64, HEX failed. Try Base64 text instead?
+        IfMsgBox, Yes
+        {
+            ; Read a small amount of file and convert to base64-like format
+            FileRead, iconBinary, *c %iconPath%
+            if (ErrorLevel) {
+                MsgBox, 16, File Error, Could not read file
+                return
+            }
+
+            ; Just take first 20 characters as test
+            testData := SubStr(iconBinary, 1, 20)
+
+            ; Simple encoding to avoid special characters - convert to numbers
+            encodedData := ""
+            testLen := StrLen(testData)
+            Loop, %testLen% {
+                charCode := Asc(SubStr(testData, A_Index, 1))
+                encodedData .= charCode . ","
+            }
+
+            textUpdateSql := "UPDATE games SET IconBlob = '" . encodedData . "' WHERE GameId = '" . escapedGameId . "'"
+
+            if (db.Exec(textUpdateSql)) {
+                changes4 := db.Changes
+                MsgBox, 64, Text Method Works, Saved as text! Changes: %changes4%
+                Gosub, GameSelected
+            } else {
+                errMsg4 := db.ErrorMsg
+                MsgBox, 16, All Methods Failed, Even text method failed: %errMsg4%
+            }
+        }
     }
 }
-Let's also try a direct test. Add this button to your GUI to test the exact same SQL that works in your game selection:
-
-; Add this button for testing
-Gui, Add, Button, gTestDirectSQL x20 y380 w100 h25, Test SQL
-
-TestDirectSQL:
-    if (CurrentGameId = "") {
-        MsgBox, 48, No Selection, Please select a game first.
-        return
-    }
-
-    ; Use the exact same SQL format as your working GameSelected function
-    StringReplace, escapedGameId, CurrentGameId, ', '', All
-    testSQL := "SELECT GameId, GameTitle FROM games WHERE GameId = '" . escapedGameId . "'"
-
-    MsgBox, 0, Test SQL, Testing SQL: %testSQL%
-
-    if !db.GetTable(testSQL, result) {
-        errMsg := db.ErrorMsg
-        MsgBox, 16, SQL Test Failed, SQL test failed: %errMsg%
-        return
-    }
-
-    if (result.RowCount = 0) {
-        MsgBox, 48, No Results, SQL executed but found 0 rows
-        return
-    }
-
-    ; Show the result
-    if result.GetRow(1, row) {
-        foundId := row[1]
-        foundTitle := row[2]
-        MsgBox, 64, SQL Test Success, Found game:`nID: %foundId%`nTitle: %foundTitle%
-    }
-return
-Try both:
-
-First run the Test SQL button to make sure we can query the current game
-Then try the modified HEX method
-This will help us see if there's a difference between how the working code queries vs our update attempts.
-
-Type a message...
-ChatDPG can make mistakes; verify important information.
