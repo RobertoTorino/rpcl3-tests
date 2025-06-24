@@ -313,38 +313,79 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     ; Create destination path with uppercase .PNG extension
     destPath := IconsFolder . "\" . gameId . ".PNG"
 
-    ; Check if source and destination folder exist
-    sourceExists := FileExist(sourcePath)
-    folderExists := FileExist(IconsFolder)
-
-    ; Debug information - proper AHK v1 syntax
-    debugMsg := "IconsFolder: " . IconsFolder
+    ; First, let's see what the actual paths are
+    scriptDir := A_ScriptDir
+    debugMsg := "Script Directory: " . scriptDir
+    debugMsg .= "`nIconsFolder Variable: " . IconsFolder
     debugMsg .= "`nSource: " . sourcePath
     debugMsg .= "`nDestination: " . destPath
-    debugMsg .= "`n`nSource exists: " . sourceExists
-    debugMsg .= "`nDestination folder exists: " . folderExists
-    debugMsg .= "`n`nProceed with copy?"
 
-    MsgBox, 4, Debug Copy, %debugMsg%
-    IfMsgBox, No
-        return
+    MsgBox, 0, Path Debug, %debugMsg%
 
-    ; Make sure the destination folder exists
-    FileCreateDir, %IconsFolder%
-
-    ; Verify folder was created
-    if !FileExist(IconsFolder) {
-        MsgBox, 16, Folder Error, Could not create rpcl3_icons folder: %IconsFolder%
+    ; Check if the script directory exists and is writable
+    if !FileExist(A_ScriptDir) {
+        MsgBox, 16, Script Dir Error, Script directory does not exist: %A_ScriptDir%
         return
     }
 
-    ; Delete destination if it exists to ensure clean copy
+    ; Try to create the folder with full error checking
+    MsgBox, 4, Create Folder, About to create folder: %IconsFolder%`n`nProceed?
+    IfMsgBox, No
+        return
+
+    ; Method 1: Try FileCreateDir
+    FileCreateDir, %IconsFolder%
+    createError := ErrorLevel
+
+    ; Check if it was created
+    folderExists := FileExist(IconsFolder)
+
+    checkMsg := "FileCreateDir ErrorLevel: " . createError
+    checkMsg .= "`nFolder exists after create: " . folderExists
+    checkMsg .= "`nChecking path: " . IconsFolder
+    MsgBox, 0, Create Result, %checkMsg%
+
+    ; If FileCreateDir failed, try alternative method
+    if (!folderExists) {
+        MsgBox, 4, Try Alternative, FileCreateDir failed. Try alternative method using RunWait?
+        IfMsgBox, Yes
+        {
+            ; Use Windows mkdir command
+            RunWait, cmd.exe /c mkdir "%IconsFolder%", , Hide
+
+            ; Check again
+            folderExists := FileExist(IconsFolder)
+            MsgBox, 0, Alternative Result, Folder exists after mkdir: %folderExists%
+        }
+    }
+
+    ; Final check
+    if !FileExist(IconsFolder) {
+        finalMsg := "Could not create rpcl3_icons folder"
+        finalMsg .= "`nPath attempted: " . IconsFolder
+        finalMsg .= "`nScript directory: " . A_ScriptDir
+        finalMsg .= "`nScript directory exists: " . FileExist(A_ScriptDir)
+        MsgBox, 16, Folder Creation Failed, %finalMsg%
+        return
+    }
+
+    MsgBox, 64, Folder Success, Folder created successfully! Proceeding with file copy...
+
+    ; Continue with the rest of the copy process...
+    ; Check source file
+    sourceExists := FileExist(sourcePath)
+    if (!sourceExists) {
+        MsgBox, 16, Source Error, Source file does not exist: %sourcePath%
+        return
+    }
+
+    ; Delete destination if it exists
     if FileExist(destPath) {
         FileDelete, %destPath%
     }
 
     ; Copy the file
-    FileCopy, %sourcePath%, %destPath%, 1  ; 1 = overwrite existing
+    FileCopy, %sourcePath%, %destPath%, 1
 
     ; Check if copy was successful
     if (ErrorLevel) {
@@ -359,21 +400,13 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
 
     ; Verify the file was actually copied
     if !FileExist(destPath) {
-        GuiControl,, StatusText, Error: File copy reported success but file not found
-        MsgBox, 16, Copy Verification Failed, Copy reported success but destination file not found:`n%destPath%
+        MsgBox, 16, Copy Verification Failed, Copy reported success but destination file not found: %destPath%
         return
     }
 
     ; Get file sizes to verify copy
     FileGetSize, sourceSize, %sourcePath%
     FileGetSize, destSize, %destPath%
-
-    if (sourceSize != destSize) {
-        sizeMsg := "Files copied but sizes differ:"
-        sizeMsg .= "`nSource: " . sourceSize . " bytes"
-        sizeMsg .= "`nDestination: " . destSize . " bytes"
-        MsgBox, 48, Size Warning, %sizeMsg%
-    }
 
     ; Success
     statusText := "Success: Icon copied to " . gameId . ".PNG (" . destSize . " bytes)"
@@ -390,6 +423,7 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     ; Refresh display
     Gosub, GameSelected
 }
+
 
 
 DeleteIconFromFolder:
