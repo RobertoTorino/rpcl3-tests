@@ -80,3 +80,34 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
         }
     }
 }
+
+
+---------------------------
+Debug HEX
+---------------------------
+Hex Preview: 89504E470D0A1A0A0000000D4948445200000140000000B008...
+
+Hex length: 100
+Test size: 50 bytes
+
+Proceed?
+---------------------------
+Yes   No
+---------------------------
+---------------------------
+Exec Result
+---------------------------
+Result:
+ErrorMsg:
+ErrorCode:
+Changes:
+---------------------------
+OK
+---------------------------
+---------------------------
+Database Error
+---------------------------
+HEX method failed - no error details but result was:
+---------------------------
+OK
+---------------------------
