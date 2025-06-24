@@ -1,228 +1,110 @@
-SaveIconToDatabase(iconPath, gameId, gameTitle) {
-    GuiControl,, StatusText, Saving icon to database...
-
-    ; Check file size
-    FileGetSize, fileSize, %iconPath%
-    if (fileSize > 500000) {  ; 500KB
-        MsgBox, 4, Large File, Warning: This file is quite large (%fileSize% bytes).`nContinue anyway?
-        IfMsgBox, No
-            return
-    }
-
-    ; Read file data
-    file := FileOpen(iconPath, "r")
-    if (!file) {
-        GuiControl,, StatusText, Error: Could not open file
-        MsgBox, 16, File Error, Could not open icon file: %iconPath%
-        return
-    }
-
-    fileLength := file.Length
-    VarSetCapacity(iconData, fileLength)
-    bytesRead := file.RawRead(iconData, fileLength)
-    file.Close()
-
-    if (bytesRead != fileLength) {
-        GuiControl,, StatusText, Error: Could not read file completely
-        MsgBox, 16, Read Error, Could not read icon file completely`nExpected: %fileLength% bytes`nRead: %bytesRead% bytes
-        return
-    }
-
-    ; Prepare SQL
-    StringReplace, escapedGameId, gameId, ', '', All
-    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
-
-    ; Create BLOB array - debug the values
-    blobArray := []
-    blobArray[1] := {Addr: &iconData, Size: bytesRead}
-
-    ; Debug information
-    addr := &iconData
-    MsgBox, 4, Debug Info, File Size: %bytesRead% bytes`nMemory Address: %addr%`nSQL: %updateSql%`n`nBlobArray[1].Addr: %addr%`nBlobArray[1].Size: %bytesRead%`n`nProceed with StoreBLOB?
-    IfMsgBox, No
-        return
-
-    ; Clear any previous errors
-    db.ErrorMsg := ""
-    db.ErrorCode := 0
-
-    result := db.StoreBLOB(updateSql, blobArray)
-
-    ; Debug the result
-    errMsg := db.ErrorMsg
-    errCode := db.ErrorCode
-
-    MsgBox, 0, StoreBLOB Result, Result: %result%`nErrorMsg: %errMsg%`nErrorCode: %errCode%
-
-    if (result) {
-        statusText := "Success: Icon saved to database (" . bytesRead . " bytes)"
-        GuiControl,, StatusText, %statusText%
-
-        iconText := "Yes (Size: " . bytesRead . " bytes)"
-        GuiControl,, IconInDB, %iconText%
-
-        ; Update preview
-        GuiControl,, CurrentIcon, %iconPath%
-        GuiControl,, IconStatus, Saved to database
-
-        MsgBox, 64, Success, Icon successfully saved to database!
-
-        ; Refresh display
-        Gosub, GameSelected
-
+; Add this test function to debug the database
+TestDatabaseConnection() {
+    ; Test 1: Check if we can do a simple SELECT
+    sql1 := "SELECT COUNT(*) FROM games"
+    if (db.GetTable(sql1, result1)) {
+        result1.GetRow(1, row)
+        gameCount := row[1]
+        MsgBox, 0, Test 1, Games table accessible. Count: %gameCount%
     } else {
-        GuiControl,, StatusText, Error: Failed to save icon to database
-        MsgBox, 16, Database Error, Failed to save icon to database:`nErrorMsg: %errMsg%`nErrorCode: %errCode%
-    }
-}
-
-
-ChatDPG
-I see the issue! The StoreBLOB method is returning an empty result (not True or 1), which means it's not explicitly returning True on success. Looking at your SQLiteDB class, the StoreBLOB method returns True on success, but it seems like it might be returning an empty value instead.
-
-Let me fix this by checking the result more carefully:
-
-SaveIconToDatabase(iconPath, gameId, gameTitle) {
-    GuiControl,, StatusText, Saving icon to database...
-
-    ; Check file size
-    FileGetSize, fileSize, %iconPath%
-    if (fileSize > 500000) {  ; 500KB
-        MsgBox, 4, Large File, Warning: This file is quite large (%fileSize% bytes).`nContinue anyway?
-        IfMsgBox, No
-            return
-    }
-
-    ; Read file data
-    file := FileOpen(iconPath, "r")
-    if (!file) {
-        GuiControl,, StatusText, Error: Could not open file
-        MsgBox, 16, File Error, Could not open icon file: %iconPath%
+        MsgBox, 16, Test 1 Failed, Cannot access games table: %db.ErrorMsg%
         return
     }
 
-    fileLength := file.Length
-    VarSetCapacity(iconData, fileLength)
-    bytesRead := file.RawRead(iconData, fileLength)
-    file.Close()
-
-    if (bytesRead != fileLength) {
-        GuiControl,, StatusText, Error: Could not read file completely
-        MsgBox, 16, Read Error, Could not read icon file completely`nExpected: %fileLength% bytes`nRead: %bytesRead% bytes
-        return
-    }
-
-    ; Prepare SQL
-    StringReplace, escapedGameId, gameId, ', '', All
-    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
-
-    ; Create BLOB array
-    blobArray := []
-    blobArray[1] := {Addr: &iconData, Size: bytesRead}
-
-    ; Clear any previous errors
-    db.ErrorMsg := ""
-    db.ErrorCode := 0
-
-    result := db.StoreBLOB(updateSql, blobArray)
-
-    ; Check if there were any errors (even if result is empty)
-    errMsg := db.ErrorMsg
-    errCode := db.ErrorCode
-
-    ; If no error message and no error code, consider it successful
-    if (errMsg = "" && errCode = 0) {
-        statusText := "Success: Icon saved to database (" . bytesRead . " bytes)"
-        GuiControl,, StatusText, %statusText%
-
-        iconText := "Yes (Size: " . bytesRead . " bytes)"
-        GuiControl,, IconInDB, %iconText%
-
-        ; Update preview
-        GuiControl,, CurrentIcon, %iconPath%
-        GuiControl,, IconStatus, Saved to database
-
-        MsgBox, 64, Success, Icon successfully saved to database!
-
-        ; Refresh display
-        Gosub, GameSelected
-
-    } else {
-        ; There was an error
-        GuiControl,, StatusText, Error: Failed to save icon to database
-        if (errMsg != "") {
-            MsgBox, 16, Database Error, Failed to save icon to database:`n%errMsg%
-        } else if (errCode != 0) {
-            MsgBox, 16, Database Error, Failed to save icon to database:`nError Code: %errCode%
-        } else {
-            MsgBox, 16, Database Error, Failed to save icon to database:`nUnknown error (no error message or code)
+    ; Test 2: Check table structure
+    sql2 := "PRAGMA table_info(games)"
+    if (db.GetTable(sql2, result2)) {
+        MsgBox, 0, Test 2, Table structure query successful. Columns: %result2.RowCount%
+        columnInfo := ""
+        Loop, % result2.RowCount {
+            result2.GetRow(A_Index, row)
+            columnInfo .= row[2] . " (" . row[3] . "), "  ; name (type)
         }
-    }
-}
-
-
-Since your debug shows that ErrorMsg and ErrorCode are both empty, which typically means success, let's check if the data was actually saved. The issue might be that the StoreBLOB method completed successfully but didn't return True explicitly.
-
-Try this version and see if it reports success. If it does report success, we should check if the data was actually written to the database by refreshing the game selection to see if the icon appears.
-
-If that doesn't work, let's also try the prepared statement approach as it might be more reliable:
-
-; Add this as an alternative function to test
-SaveIconToDatabasePrepared(iconPath, gameId, gameTitle) {
-    GuiControl,, StatusText, Saving icon to database (prepared statement)...
-
-    ; Read file data
-    file := FileOpen(iconPath, "r")
-    if (!file) {
-        GuiControl,, StatusText, Error: Could not open file
-        MsgBox, 16, File Error, Could not open icon file: %iconPath%
+        MsgBox, 0, Column Info, %columnInfo%
+    } else {
+        MsgBox, 16, Test 2 Failed, Cannot get table info: %db.ErrorMsg%
         return
     }
 
-    fileLength := file.Length
-    VarSetCapacity(iconData, fileLength)
-    bytesRead := file.RawRead(iconData, fileLength)
-    file.Close()
+    ; Test 3: Check if we can do a simple UPDATE without BLOB
+    StringReplace, escapedGameId, CurrentGameId, ', '', All
+    sql3 := "UPDATE games SET Icon0 = 'test_update' WHERE GameId = '" . escapedGameId . "'"
+    if (db.Exec(sql3)) {
+        MsgBox, 0, Test 3, Simple UPDATE works. Changes: %db.Changes%
+    } else {
+        MsgBox, 16, Test 3 Failed, Simple UPDATE failed: %db.ErrorMsg%
+        return
+    }
 
-    ; Prepare SQL
-    StringReplace, escapedGameId, gameId, ', '', All
-    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
-
-    ; Use prepared statement
+    ; Test 4: Try to prepare a simple statement
+    sql4 := "SELECT GameId FROM games WHERE GameId = ?"
     stmt := ""
-    if (!db.Prepare(updateSql, stmt)) {
-        errMsg := db.ErrorMsg
-        MsgBox, 16, Prepare Error, Failed to prepare statement:`n%errMsg%
-        return
-    }
-
-    ; Bind BLOB parameter (parameter 1, type "Blob", data address, data size)
-    if (!stmt.Bind(1, "Blob", &iconData, bytesRead)) {
-        errMsg := stmt.ErrorMsg
-        MsgBox, 16, Bind Error, Failed to bind BLOB:`n%errMsg%
+    if (db.Prepare(sql4, stmt)) {
+        MsgBox, 0, Test 4, Simple prepare statement works
         stmt.Free()
+    } else {
+        MsgBox, 16, Test 4 Failed, Simple prepare failed: %db.ErrorMsg%
         return
     }
 
-    ; Execute
-    if (stmt.Step()) {
-        statusText := "Success: Icon saved via prepared statement (" . bytesRead . " bytes)"
+    MsgBox, 0, All Tests, All basic database tests passed
+}
+Add a button to test this:
+
+; Add this button in your GUI section
+Gui, Add, Button, gTestDB x270 y380 w100 h25, Test DB
+
+; Add this label
+TestDB:
+    TestDatabaseConnection()
+return
+Also, let's try a completely different approach using direct SQL execution with hex encoding:
+
+SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
+    GuiControl,, StatusText, Saving icon as HEX...
+
+    ; Read file as binary
+    FileRead, iconBinary, *c %iconPath%
+    if (ErrorLevel) {
+        MsgBox, 16, File Error, Could not read file: %iconPath%
+        return
+    }
+
+    ; Convert binary data to hex string
+    hexString := ""
+    Loop, % StrLen(iconBinary) {
+        byte := Asc(SubStr(iconBinary, A_Index, 1))
+        hexString .= Format("{:02X}", byte)
+    }
+
+    ; Create SQL with hex literal
+    StringReplace, escapedGameId, gameId, ', '', All
+    updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . escapedGameId . "'"
+
+    if (db.Exec(updateSql)) {
+        bytesOriginal := StrLen(iconBinary)
+        statusText := "Success: Icon saved as HEX (" . bytesOriginal . " bytes)"
         GuiControl,, StatusText, %statusText%
 
-        iconText := "Yes (Size: " . bytesRead . " bytes)"
+        iconText := "Yes (HEX: " . bytesOriginal . " bytes)"
         GuiControl,, IconInDB, %iconText%
 
         GuiControl,, CurrentIcon, %iconPath%
-        GuiControl,, IconStatus, Saved to database
+        GuiControl,, IconStatus, Saved as HEX
 
-        MsgBox, 64, Success, Icon saved via prepared statement!
-
-        stmt.Free()
+        MsgBox, 64, Success, Icon saved as HEX literal!
         Gosub, GameSelected
 
     } else {
-        errMsg := stmt.ErrorMsg
-        MsgBox, 16, Execute Error, Failed to execute:`n%errMsg%
-        stmt.Free()
+        errMsg := db.ErrorMsg
+        GuiControl,, StatusText, Error: HEX method failed
+        MsgBox, 16, Database Error, HEX method failed:`n%errMsg%
     }
 }
+Try these steps:
+
+First run the database test to make sure everything basic is working
+If the tests pass, try the HEX method which uses SQLite's X'hexdata' syntax to insert binary data
+The HEX method is often more reliable because it doesn't rely on memory pointers or BLOB binding - it just creates a SQL string with the binary data encoded as hexadecimal.
+
+Let me know what the database tests show and if the HEX method works!
