@@ -313,8 +313,19 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     ; Create destination path with uppercase .PNG extension
     destPath := IconsFolder . "\" . gameId . ".PNG"
 
-    ; Debug information
-    MsgBox, 4, Debug Copy, IconsFolder: %IconsFolder%`nSource: %sourcePath%`nDestination: %destPath%`n`nSource exists: %FileExist(sourcePath)%`nDestination folder exists: %FileExist(IconsFolder)%`n`nProceed with copy?
+    ; Check if source and destination folder exist
+    sourceExists := FileExist(sourcePath)
+    folderExists := FileExist(IconsFolder)
+
+    ; Debug information - proper AHK v1 syntax
+    debugMsg := "IconsFolder: " . IconsFolder
+    debugMsg .= "`nSource: " . sourcePath
+    debugMsg .= "`nDestination: " . destPath
+    debugMsg .= "`n`nSource exists: " . sourceExists
+    debugMsg .= "`nDestination folder exists: " . folderExists
+    debugMsg .= "`n`nProceed with copy?"
+
+    MsgBox, 4, Debug Copy, %debugMsg%
     IfMsgBox, No
         return
 
@@ -338,7 +349,11 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     ; Check if copy was successful
     if (ErrorLevel) {
         GuiControl,, StatusText, Error: Failed to copy icon file
-        MsgBox, 16, Copy Error, Failed to copy icon file`nSource: %sourcePath%`nDestination: %destPath%`nErrorLevel: %ErrorLevel%
+        errorMsg := "Failed to copy icon file"
+        errorMsg .= "`nSource: " . sourcePath
+        errorMsg .= "`nDestination: " . destPath
+        errorMsg .= "`nErrorLevel: " . ErrorLevel
+        MsgBox, 16, Copy Error, %errorMsg%
         return
     }
 
@@ -354,7 +369,10 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     FileGetSize, destSize, %destPath%
 
     if (sourceSize != destSize) {
-        MsgBox, 48, Size Warning, Files copied but sizes differ:`nSource: %sourceSize% bytes`nDestination: %destSize% bytes
+        sizeMsg := "Files copied but sizes differ:"
+        sizeMsg .= "`nSource: " . sourceSize . " bytes"
+        sizeMsg .= "`nDestination: " . destSize . " bytes"
+        MsgBox, 48, Size Warning, %sizeMsg%
     }
 
     ; Success
@@ -365,11 +383,14 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     GuiControl,, CurrentIcon, %destPath%
     GuiControl,, IconStatus, Copied to rpcl3_icons folder
 
-    MsgBox, 64, Success, Icon successfully copied to rpcl3_icons folder as %gameId%.PNG!`nSize: %destSize% bytes
+    successMsg := "Icon successfully copied to rpcl3_icons folder as " . gameId . ".PNG!"
+    successMsg .= "`nSize: " . destSize . " bytes"
+    MsgBox, 64, Success, %successMsg%
 
     ; Refresh display
     Gosub, GameSelected
 }
+
 
 DeleteIconFromFolder:
     if (CurrentGameId = "") {
