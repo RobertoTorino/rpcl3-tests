@@ -1,3 +1,7 @@
+Since the HEX method is also failing, let's add some debugging to see what the actual SQL error is. Also, let's check if the column type is correctly defined as BLOB.
+
+First, let's debug the HEX method to see the exact error:
+
 SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon as HEX...
 
@@ -8,104 +12,119 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
         return
     }
 
-    ; Convert binary data to hex string manually
-    hexString := ""
-    iconLength := StrLen(iconBinary)
-
-    ; Show progress for large files
-    if (iconLength > 50000) {
-        GuiControl,, StatusText, Converting to HEX... this may take a moment for large files
+    ; For debugging, let's try with a very small portion first
+    ; Take only first 100 bytes for testing
+    if (StrLen(iconBinary) > 100) {
+        testBinary := SubStr(iconBinary, 1, 100)
+    } else {
+        testBinary := iconBinary
     }
 
-    Loop, %iconLength% {
-        charCode := Asc(SubStr(iconBinary, A_Index, 1))
+    ; Convert to hex
+    hexString := ""
+    testLength := StrLen(testBinary)
 
-        ; Manual hex conversion for AHK v1
+    Loop, %testLength% {
+        charCode := Asc(SubStr(testBinary, A_Index, 1))
+
+        ; Manual hex conversion
         hex1 := charCode // 16
         hex2 := Mod(charCode, 16)
 
-        ; Convert to hex characters
         if (hex1 < 10)
-            hexChar1 := Chr(48 + hex1)  ; 0-9
+            hexChar1 := Chr(48 + hex1)
         else
-            hexChar1 := Chr(55 + hex1)  ; A-F
+            hexChar1 := Chr(55 + hex1)
 
         if (hex2 < 10)
-            hexChar2 := Chr(48 + hex2)  ; 0-9
+            hexChar2 := Chr(48 + hex2)
         else
-            hexChar2 := Chr(55 + hex2)  ; A-F
+            hexChar2 := Chr(55 + hex2)
 
         hexString .= hexChar1 . hexChar2
     }
 
-    ; Create SQL with hex literal
+    ; Debug the SQL before executing
     StringReplace, escapedGameId, gameId, ', '', All
     updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . escapedGameId . "'"
 
+    ; Show the SQL for debugging (truncated)
+    sqlPreview := SubStr(updateSql, 1, 200) . "..."
+    MsgBox, 4, Debug SQL, SQL Preview: %sqlPreview%`n`nHex length: %StrLen(hexString)%`nTest data length: %testLength%`n`nProceed?
+    IfMsgBox, No
+        return
+
     GuiControl,, StatusText, Executing SQL update...
 
-    if (db.Exec(updateSql)) {
-        bytesOriginal := StrLen(iconBinary)
-        statusText := "Success: Icon saved as HEX (" . bytesOriginal . " bytes)"
-        GuiControl,, StatusText, %statusText%
+    ; Clear previous errors
+    db.ErrorMsg := ""
+    db.ErrorCode := 0
 
-        iconText := "Yes (Size: " . bytesOriginal . " bytes)"
-        GuiControl,, IconInDB, %iconText%
+    result := db.Exec(updateSql)
 
-        GuiControl,, CurrentIcon, %iconPath%
-        GuiControl,, IconStatus, Saved to database (HEX)
+    ; Get detailed error info
+    errMsg := db.ErrorMsg
+    errCode := db.ErrorCode
+    changes := db.Changes
 
-        MsgBox, 64, Success, Icon saved to database using HEX method!
+    MsgBox, 0, Exec Result, Result: %result%`nErrorMsg: %errMsg%`nErrorCode: %errCode%`nChanges: %changes%
+
+    if (result) {
+        GuiControl,, StatusText, Success: Icon saved as HEX (test with %testLength% bytes)
+        MsgBox, 64, Success, Icon saved using HEX method (test data)!
         Gosub, GameSelected
 
     } else {
-        errMsg := db.ErrorMsg
         GuiControl,, StatusText, Error: HEX method failed
-        MsgBox, 16, Database Error, HEX method failed:`n%errMsg%
+        if (errMsg != "") {
+            MsgBox, 16, Database Error, HEX method failed:`nError: %errMsg%`nCode: %errCode%
+        } else {
+            MsgBox, 16, Database Error, HEX method failed with no specific error message
+        }
     }
 }
-Now, to test this, modify one of your existing buttons to use this method. Change the SaveIconToDatabase calls to SaveIconToDatabaseHex:
+Also, let's create a simple direct test to check the column and try a minimal BLOB insert:
 
-SaveExistingIcon:
+; Add this button to your GUI for testing
+Gui, Add, Button, gSimpleTest x370 y380 w100 h25, Simple Test
+
+SimpleTest:
     if (CurrentGameId = "") {
         MsgBox, 48, No Selection, Please select a game first.
         return
     }
 
-    if (CurrentIconPath = "" || !FileExist(CurrentIconPath)) {
-        MsgBox, 48, No File, No existing icon file found for this game.`n`nExpected location: %CurrentIconPath%
-        return
+    ; Test 1: Check if the column exists and what type it is
+    sql1 := "SELECT sql FROM sqlite_master WHERE type='table' AND name='games'"
+    if (db.GetTable(sql1, result1)) {
+        if result1.GetRow(1, row) {
+            createSql := row[1]
+            MsgBox, 0, Table Definition, %createSql%
+        }
     }
 
-    ; Confirm action
-    MsgBox, 4, Confirm Save, Save the existing icon file to database using HEX method?`n`nFile: %CurrentIconPath%`nGame: %CurrentGameTitle%
+    ; Test 2: Try inserting a simple hex value
+    StringReplace, escapedGameId, CurrentGameId, ', '', All
+    testSql := "UPDATE games SET IconBlob = X'48656C6C6F' WHERE GameId = '" . escapedGameId . "'"
 
-    IfMsgBox, No
-        return
-
-    ; Use HEX method instead
-    SaveIconToDatabaseHex(CurrentIconPath, CurrentGameId, CurrentGameTitle)
+    MsgBox, 4, Test Simple HEX, Try simple HEX update?`nSQL: %testSql%`n(This will set IconBlob to "Hello" in hex)
+    IfMsgBox, Yes {
+        if (db.Exec(testSql)) {
+            changes := db.Changes
+            MsgBox, 64, Test Success, Simple HEX insert worked! Changes: %changes%
+            Gosub, GameSelected
+        } else {
+            errMsg := db.ErrorMsg
+            MsgBox, 16, Test Failed, Simple HEX failed: %errMsg%
+        }
+    }
 return
+Try both:
 
-BrowseAndSaveIcon:
-    if (CurrentGameId = "") {
-        MsgBox, 48, No Selection, Please select a game first.
-        return
-    }
+First run the Simple Test to see if basic HEX insertion works and to check your table structure
+Then try the debug HEX method to see exactly what error occurs
+This will help us understand if:
 
-    ; Browse for icon file
-    FileSelectFile, selectedIcon, 1, , Select icon file, Image Files (*.png; *.jpg; *.jpeg; *.bmp; *.gif)
-
-    if (selectedIcon = "") {
-        return
-    }
-
-    ; Confirm action
-    MsgBox, 4, Confirm Save, Save this icon to database using HEX method?`n`nFile: %selectedIcon%`nGame: %CurrentGameTitle%
-
-    IfMsgBox, No
-        return
-
-    ; Use HEX method instead
-    SaveIconToDatabaseHex(selectedIcon, CurrentGameId, CurrentGameTitle)
-return
+The column type is correct
+Basic HEX insertion works
+There's a specific error with the data or SQL syntax
