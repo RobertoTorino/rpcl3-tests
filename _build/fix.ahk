@@ -1,7 +1,3 @@
-Since the HEX method is also failing, let's add some debugging to see what the actual SQL error is. Also, let's check if the column type is correctly defined as BLOB.
-
-First, let's debug the HEX method to see the exact error:
-
 SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon as HEX...
 
@@ -14,15 +10,16 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
 
     ; For debugging, let's try with a very small portion first
     ; Take only first 100 bytes for testing
-    if (StrLen(iconBinary) > 100) {
+    testLength := StrLen(iconBinary)
+    if (testLength > 100) {
         testBinary := SubStr(iconBinary, 1, 100)
+        testLength := 100
     } else {
         testBinary := iconBinary
     }
 
     ; Convert to hex
     hexString := ""
-    testLength := StrLen(testBinary)
 
     Loop, %testLength% {
         charCode := Asc(SubStr(testBinary, A_Index, 1))
@@ -50,7 +47,8 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
 
     ; Show the SQL for debugging (truncated)
     sqlPreview := SubStr(updateSql, 1, 200) . "..."
-    MsgBox, 4, Debug SQL, SQL Preview: %sqlPreview%`n`nHex length: %StrLen(hexString)%`nTest data length: %testLength%`n`nProceed?
+    hexLen := StrLen(hexString)
+    MsgBox, 4, Debug SQL, SQL Preview: %sqlPreview%`n`nHex length: %hexLen%`nTest data length: %testLength%`n`nProceed?
     IfMsgBox, No
         return
 
@@ -83,7 +81,7 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
         }
     }
 }
-Also, let's create a simple direct test to check the column and try a minimal BLOB insert:
+And the simple test function:
 
 ; Add this button to your GUI for testing
 Gui, Add, Button, gSimpleTest x370 y380 w100 h25, Simple Test
@@ -96,7 +94,7 @@ SimpleTest:
 
     ; Test 1: Check if the column exists and what type it is
     sql1 := "SELECT sql FROM sqlite_master WHERE type='table' AND name='games'"
-    if (db.GetTable(sql1, result1)) {
+    if db.GetTable(sql1, result1) {
         if result1.GetRow(1, row) {
             createSql := row[1]
             MsgBox, 0, Table Definition, %createSql%
@@ -108,8 +106,9 @@ SimpleTest:
     testSql := "UPDATE games SET IconBlob = X'48656C6C6F' WHERE GameId = '" . escapedGameId . "'"
 
     MsgBox, 4, Test Simple HEX, Try simple HEX update?`nSQL: %testSql%`n(This will set IconBlob to "Hello" in hex)
-    IfMsgBox, Yes {
-        if (db.Exec(testSql)) {
+    IfMsgBox, Yes
+    {
+        if db.Exec(testSql) {
             changes := db.Changes
             MsgBox, 64, Test Success, Simple HEX insert worked! Changes: %changes%
             Gosub, GameSelected
@@ -119,12 +118,8 @@ SimpleTest:
         }
     }
 return
-Try both:
+The key AHK v1 syntax fixes:
 
-First run the Simple Test to see if basic HEX insertion works and to check your table structure
-Then try the debug HEX method to see exactly what error occurs
-This will help us understand if:
-
-The column type is correct
-Basic HEX insertion works
-There's a specific error with the data or SQL syntax
+Removed parentheses around conditions in if statements
+Used proper IfMsgBox syntax
+Fixed variable references in MsgBox
