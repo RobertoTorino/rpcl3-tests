@@ -282,3 +282,24 @@ return
 GuiClose:
     db.CloseDB()
 ExitApp
+
+
+---------------------------
+Confirm Copy
+---------------------------
+Copy this icon to rpcs3_icons folder?
+
+From: E:\TEKKEN-TAG-TOURNAMENT-2-TEST-ENV\games\Ridge Racer 7 [BLUS30001]\PS3_GAME\ICON0.PNG
+To: BLUS30001.png
+Game: Ridge Racer 7
+---------------------------
+Yes   No
+---------------------------
+---------------------------
+Success
+---------------------------
+Icon successfully copied to rpcs3_icons folder as BLUS30001.png!
+---------------------------
+OK
+---------------------------
+
