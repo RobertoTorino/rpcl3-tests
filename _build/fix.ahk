@@ -1,5 +1,29 @@
+Great! The hex conversion is now working correctly (I can see proper PNG header: 89504E47...). The issue now is that the SQL is executing but not updating any rows (`Changes: 0`), which means the `WHERE` clause isn't matching any records.
+
+Let's debug the WHERE clause:
+
+```autohotkey
 SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon as HEX...
+
+    ; First, let's verify the game exists
+    StringReplace, escapedGameId, gameId, ', '', All
+    testSql := "SELECT COUNT(*) FROM games WHERE GameId = '" . escapedGameId . "'"
+
+    if db.GetTable(testSql, testResult) {
+        if testResult.GetRow(1, testRow) {
+            gameCount := testRow[1]
+            if (gameCount = 0) {
+                MsgBox, 16, Game Not Found, Game ID '%escapedGameId%' not found in database!
+                return
+            } else {
+                MsgBox, 0, Game Found, Game ID '%escapedGameId%' exists in database (Count: %gameCount%)
+            }
+        }
+    } else {
+        MsgBox, 16, Query Error, Could not verify game exists
+        return
+    }
 
     ; Read file size first
     FileGetSize, fileSize, %iconPath%
@@ -21,14 +45,12 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     ; Read bytes and convert to proper hex
     hexString := ""
     Loop, %testSize% {
-        ; Read one byte at a time
-        byte := file.ReadUChar()  ; Read unsigned char (0-255)
+        byte := file.ReadUChar()
 
         ; Convert byte to 2-digit hex
         hex1 := byte // 16
         hex2 := Mod(byte, 16)
 
-        ; Convert to hex characters (0-9, A-F)
         hexDigits := "0123456789ABCDEF"
         hexChar1 := SubStr(hexDigits, hex1 + 1, 1)
         hexChar2 := SubStr(hexDigits, hex2 + 1, 1)
@@ -38,76 +60,40 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
 
     file.Close()
 
-    ; Debug the hex string
-    hexLen := StrLen(hexString)
-    hexPreview := SubStr(hexString, 1, 50) . "..."
-    MsgBox, 4, Debug HEX, Hex Preview: %hexPreview%`n`nHex length: %hexLen%`nTest size: %testSize% bytes`n`nProceed?
+    ; Create and show the exact SQL
+    updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . escapedGameId . "'"
+
+    ; Show the exact WHERE clause for debugging
+    whereClause := "WHERE GameId = '" . escapedGameId . "'"
+    MsgBox, 4, Debug WHERE, WHERE clause: %whereClause%`n`nOriginal GameId: %gameId%`nEscaped GameId: %escapedGameId%`n`nProceed with UPDATE?
     IfMsgBox, No
         return
 
-    ; Create SQL
-    StringReplace, escapedGameId, gameId, ', '', All
-    updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . escapedGameId . "'"
-
     GuiControl,, StatusText, Executing SQL update...
 
-    ; Clear previous errors and execute
-    db.ErrorMsg := ""
-    db.ErrorCode := 0
-
+    ; Execute the update
     result := db.Exec(updateSql)
-
-    ; Get results
+    changes := db.Changes
     errMsg := db.ErrorMsg
     errCode := db.ErrorCode
-    changes := db.Changes
 
-    MsgBox, 0, Exec Result, Result: %result%`nErrorMsg: %errMsg%`nErrorCode: %errCode%`nChanges: %changes%
+    MsgBox, 0, Full Result, Result: %result%`nChanges: %changes%`nErrorMsg: %errMsg%`nErrorCode: %errCode%
 
-    ; Check for success - if no error and changes > 0
-    if (errMsg = "" && errCode = 0 && changes > 0) {
+    if (changes > 0) {
         GuiControl,, StatusText, Success: Icon saved as HEX (%testSize% bytes)
-        MsgBox, 64, Success, Icon saved using HEX method!
+        MsgBox, 64, Success, Icon saved! %changes% row(s) updated.
         Gosub, GameSelected
     } else if (changes = 0) {
-        MsgBox, 48, No Changes, SQL executed but no rows were updated. Check if GameId exists.
+        MsgBox, 48, No Rows Updated, SQL executed successfully but 0 rows were updated.`nThis means the WHERE clause didn't match any records.`n`nCheck if GameId '%escapedGameId%' exists and matches exactly.
     } else {
-        GuiControl,, StatusText, Error: HEX method failed
-        if (errMsg != "") {
-            MsgBox, 16, Database Error, HEX method failed:`nError: %errMsg%`nCode: %errCode%
-        } else {
-            MsgBox, 16, Database Error, HEX method failed - no error details but result was: %result%
-        }
+        MsgBox, 16, Database Error, Update failed:`nError: %errMsg%`nCode: %errCode%
     }
 }
+```
 
+This will help us identify:
+1. Whether the game ID actually exists in the database
+2. What the exact WHERE clause looks like
+3. Whether there's a mismatch in the game ID format
 
----------------------------
-Debug HEX
----------------------------
-Hex Preview: 89504E470D0A1A0A0000000D4948445200000140000000B008...
-
-Hex length: 100
-Test size: 50 bytes
-
-Proceed?
----------------------------
-Yes   No
----------------------------
----------------------------
-Exec Result
----------------------------
-Result:
-ErrorMsg:
-ErrorCode:
-Changes:
----------------------------
-OK
----------------------------
----------------------------
-Database Error
----------------------------
-HEX method failed - no error details but result was:
----------------------------
-OK
----------------------------
+Try this and let me know what the messages show - especially whether it finds the game in the first check and what the WHERE clause looks like.
