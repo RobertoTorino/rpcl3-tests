@@ -10,8 +10,8 @@ if !db.OpenDB(A_ScriptDir . "\games.db") {
     ExitApp
 }
 
-; Create icons folder if it doesn't exist
-IconsFolder := A_ScriptDir . "\rpcs3_icons"
+; Create icons folder if it doesn't exist - CORRECTED NAME
+IconsFolder := A_ScriptDir . "\rpcl3_icons"
 FileCreateDir, %IconsFolder%
 
 ; Create Icon Manager GUI
@@ -32,7 +32,7 @@ Gui, Add, Text, x20 y170, Selected Game:
 Gui, Add, Text, vSelectedGame x20 y185 w450 h20, None selected
 Gui, Add, Text, x20 y205, Current Icon Path:
 Gui, Add, Text, vCurrentIconPath x20 y220 w450 h20, -
-Gui, Add, Text, x20 y235, Icon in rpcs3_icons:
+Gui, Add, Text, x20 y235, Icon in rpcl3_icons:
 Gui, Add, Text, vIconInFolder x20 y250 w200 h20, Checking...
 
 ; Icon Preview section
@@ -172,7 +172,7 @@ GameListSelect:
         LV_GetText(selectedGameId, selectedRow, 1)
         LV_GetText(selectedGameTitle, selectedRow, 2)
 
-        ; Check for icon in rpcs3_icons folder
+        ; Check for icon in rpcl3_icons folder
         iconPath := IconsFolder . "\" . selectedGameId . ".PNG"
 
         if FileExist(iconPath) {
@@ -182,7 +182,7 @@ GameListSelect:
             GuiControl, GameList:, GameListIconPath, %iconPath%
         } else {
             GuiControl, GameList:, GameListIcon,
-            GuiControl, GameList:, GameListIconStatus, No icon in rpcs3_icons
+            GuiControl, GameList:, GameListIconStatus, No icon in rpcl3_icons
             GuiControl, GameList:, GameListIconPath, Looking for: %iconPath%
         }
     }
@@ -230,19 +230,19 @@ GameSelected:
         CurrentIconPath := ""
     }
 
-    ; Check for icon in rpcs3_icons folder (with uppercase .PNG)
+    ; Check for icon in rpcl3_icons folder (with uppercase .PNG)
     IconInFolder := IconsFolder . "\" . CurrentGameId . ".PNG"
 
     ; Update GUI
     GuiControl,, SelectedGame, %CurrentGameId% - %CurrentGameTitle%
     GuiControl,, CurrentIconPath, %CurrentIconPath%
 
-    ; Check if icon exists in rpcs3_icons folder
+    ; Check if icon exists in rpcl3_icons folder
     if FileExist(IconInFolder) {
         FileGetSize, iconSize, %IconInFolder%
         GuiControl,, IconInFolder, Yes (%iconSize% bytes)
         GuiControl,, CurrentIcon, %IconInFolder%
-        GuiControl,, IconStatus, From rpcs3_icons folder
+        GuiControl,, IconStatus, From rpcl3_icons folder
     } else {
         GuiControl,, IconInFolder, No
 
@@ -277,7 +277,7 @@ CopyExistingIcon:
     }
 
     ; Confirm action
-    MsgBox, 4, Confirm Copy, Copy the existing icon file to rpcs3_icons folder?`n`nFrom: %CurrentIconPath%`nTo: %CurrentGameId%.PNG`nGame: %CurrentGameTitle%
+    MsgBox, 4, Confirm Copy, Copy the existing icon file to rpcl3_icons folder?`n`nFrom: %CurrentIconPath%`nTo: %CurrentGameId%.PNG`nGame: %CurrentGameTitle%
 
     IfMsgBox, No
         return
@@ -299,7 +299,7 @@ BrowseAndCopyIcon:
     }
 
     ; Confirm action
-    MsgBox, 4, Confirm Copy, Copy this icon to rpcs3_icons folder?`n`nFrom: %selectedIcon%`nTo: %CurrentGameId%.PNG`nGame: %CurrentGameTitle%
+    MsgBox, 4, Confirm Copy, Copy this icon to rpcl3_icons folder?`n`nFrom: %selectedIcon%`nTo: %CurrentGameId%.PNG`nGame: %CurrentGameTitle%
 
     IfMsgBox, No
         return
@@ -308,13 +308,24 @@ BrowseAndCopyIcon:
 return
 
 CopyIconToFolder(sourcePath, gameId, gameTitle) {
-    GuiControl,, StatusText, Copying icon to rpcs3_icons folder...
+    GuiControl,, StatusText, Copying icon to rpcl3_icons folder...
 
     ; Create destination path with uppercase .PNG extension
     destPath := IconsFolder . "\" . gameId . ".PNG"
 
+    ; Debug information
+    MsgBox, 4, Debug Copy, IconsFolder: %IconsFolder%`nSource: %sourcePath%`nDestination: %destPath%`n`nSource exists: %FileExist(sourcePath)%`nDestination folder exists: %FileExist(IconsFolder)%`n`nProceed with copy?
+    IfMsgBox, No
+        return
+
     ; Make sure the destination folder exists
     FileCreateDir, %IconsFolder%
+
+    ; Verify folder was created
+    if !FileExist(IconsFolder) {
+        MsgBox, 16, Folder Error, Could not create rpcl3_icons folder: %IconsFolder%
+        return
+    }
 
     ; Delete destination if it exists to ensure clean copy
     if FileExist(destPath) {
@@ -342,15 +353,19 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     FileGetSize, sourceSize, %sourcePath%
     FileGetSize, destSize, %destPath%
 
+    if (sourceSize != destSize) {
+        MsgBox, 48, Size Warning, Files copied but sizes differ:`nSource: %sourceSize% bytes`nDestination: %destSize% bytes
+    }
+
     ; Success
     statusText := "Success: Icon copied to " . gameId . ".PNG (" . destSize . " bytes)"
     GuiControl,, StatusText, %statusText%
 
     GuiControl,, IconInFolder, Yes (%destSize% bytes)
     GuiControl,, CurrentIcon, %destPath%
-    GuiControl,, IconStatus, Copied to rpcs3_icons folder
+    GuiControl,, IconStatus, Copied to rpcl3_icons folder
 
-    MsgBox, 64, Success, Icon successfully copied to rpcs3_icons folder as %gameId%.PNG!
+    MsgBox, 64, Success, Icon successfully copied to rpcl3_icons folder as %gameId%.PNG!`nSize: %destSize% bytes
 
     ; Refresh display
     Gosub, GameSelected
@@ -365,12 +380,12 @@ DeleteIconFromFolder:
     ; Check if icon exists in folder (uppercase .PNG)
     IconInFolder := IconsFolder . "\" . CurrentGameId . ".PNG"
     if !FileExist(IconInFolder) {
-        MsgBox, 48, No Icon, No icon found in rpcs3_icons folder for this game.
+        MsgBox, 48, No Icon, No icon found in rpcl3_icons folder for this game.`nLooking for: %IconInFolder%
         return
     }
 
     ; Confirm deletion
-    MsgBox, 4, Confirm Delete, Delete the icon from rpcs3_icons folder?`n`nFile: %IconInFolder%`nGame: %CurrentGameTitle%`n`nNote: This will not delete the original file.
+    MsgBox, 4, Confirm Delete, Delete the icon from rpcl3_icons folder?`n`nFile: %IconInFolder%`nGame: %CurrentGameTitle%`n`nNote: This will not delete the original file.
 
     IfMsgBox, No
         return
@@ -384,8 +399,14 @@ DeleteIconFromFolder:
         return
     }
 
+    ; Verify deletion
+    if FileExist(IconInFolder) {
+        MsgBox, 16, Delete Failed, File still exists after delete attempt
+        return
+    }
+
     ; Success
-    GuiControl,, StatusText, Icon deleted from rpcs3_icons folder
+    GuiControl,, StatusText, Icon deleted from rpcl3_icons folder
     GuiControl,, IconInFolder, No
 
     ; Update preview to show original if available
@@ -397,7 +418,7 @@ DeleteIconFromFolder:
         GuiControl,, IconStatus, No icon available
     }
 
-    MsgBox, 64, Success, Icon deleted from rpcs3_icons folder
+    MsgBox, 64, Success, Icon deleted from rpcl3_icons folder
 return
 
 GuiClose:
