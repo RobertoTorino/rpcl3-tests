@@ -1,162 +1,82 @@
 SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon as HEX...
 
-    ; Read file as binary
-    FileRead, iconBinary, *c %iconPath%
+    ; Read file size first
+    FileGetSize, fileSize, %iconPath%
     if (ErrorLevel) {
-        MsgBox, 16, File Error, Could not read file: %iconPath%
+        MsgBox, 16, File Error, Could not get file size: %iconPath%
         return
     }
 
-    ; For debugging, let's try with a very small portion first
-    ; Take only first 100 bytes for testing
-    testLength := StrLen(iconBinary)
-    if (testLength > 100) {
-        testBinary := SubStr(iconBinary, 1, 100)
-        testLength := 100
-    } else {
-        testBinary := iconBinary
+    ; Open file in binary mode
+    file := FileOpen(iconPath, "r")
+    if (!file) {
+        MsgBox, 16, File Error, Could not open file: %iconPath%
+        return
     }
 
-    ; Convert to hex
+    ; For testing, read only first 50 bytes
+    testSize := (fileSize > 50) ? 50 : fileSize
+
+    ; Read bytes and convert to proper hex
     hexString := ""
+    Loop, %testSize% {
+        ; Read one byte at a time
+        byte := file.ReadUChar()  ; Read unsigned char (0-255)
 
-    Loop, %testLength% {
-        charCode := Asc(SubStr(testBinary, A_Index, 1))
+        ; Convert byte to 2-digit hex
+        hex1 := byte // 16
+        hex2 := Mod(byte, 16)
 
-        ; Manual hex conversion
-        hex1 := charCode // 16
-        hex2 := Mod(charCode, 16)
-
-        if (hex1 < 10)
-            hexChar1 := Chr(48 + hex1)
-        else
-            hexChar1 := Chr(55 + hex1)
-
-        if (hex2 < 10)
-            hexChar2 := Chr(48 + hex2)
-        else
-            hexChar2 := Chr(55 + hex2)
+        ; Convert to hex characters (0-9, A-F)
+        hexDigits := "0123456789ABCDEF"
+        hexChar1 := SubStr(hexDigits, hex1 + 1, 1)
+        hexChar2 := SubStr(hexDigits, hex2 + 1, 1)
 
         hexString .= hexChar1 . hexChar2
     }
 
-    ; Debug the SQL before executing
-    StringReplace, escapedGameId, gameId, ', '', All
-    updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . escapedGameId . "'"
+    file.Close()
 
-    ; Show the SQL for debugging (truncated)
-    sqlPreview := SubStr(updateSql, 1, 200) . "..."
+    ; Debug the hex string
     hexLen := StrLen(hexString)
-    MsgBox, 4, Debug SQL, SQL Preview: %sqlPreview%`n`nHex length: %hexLen%`nTest data length: %testLength%`n`nProceed?
+    hexPreview := SubStr(hexString, 1, 50) . "..."
+    MsgBox, 4, Debug HEX, Hex Preview: %hexPreview%`n`nHex length: %hexLen%`nTest size: %testSize% bytes`n`nProceed?
     IfMsgBox, No
         return
 
+    ; Create SQL
+    StringReplace, escapedGameId, gameId, ', '', All
+    updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . escapedGameId . "'"
+
     GuiControl,, StatusText, Executing SQL update...
 
-    ; Clear previous errors
+    ; Clear previous errors and execute
     db.ErrorMsg := ""
     db.ErrorCode := 0
 
     result := db.Exec(updateSql)
 
-    ; Get detailed error info
+    ; Get results
     errMsg := db.ErrorMsg
     errCode := db.ErrorCode
     changes := db.Changes
 
     MsgBox, 0, Exec Result, Result: %result%`nErrorMsg: %errMsg%`nErrorCode: %errCode%`nChanges: %changes%
 
-    if (result) {
-        GuiControl,, StatusText, Success: Icon saved as HEX (test with %testLength% bytes)
-        MsgBox, 64, Success, Icon saved using HEX method (test data)!
+    ; Check for success - if no error and changes > 0
+    if (errMsg = "" && errCode = 0 && changes > 0) {
+        GuiControl,, StatusText, Success: Icon saved as HEX (%testSize% bytes)
+        MsgBox, 64, Success, Icon saved using HEX method!
         Gosub, GameSelected
-
+    } else if (changes = 0) {
+        MsgBox, 48, No Changes, SQL executed but no rows were updated. Check if GameId exists.
     } else {
         GuiControl,, StatusText, Error: HEX method failed
         if (errMsg != "") {
             MsgBox, 16, Database Error, HEX method failed:`nError: %errMsg%`nCode: %errCode%
         } else {
-            MsgBox, 16, Database Error, HEX method failed with no specific error message
+            MsgBox, 16, Database Error, HEX method failed - no error details but result was: %result%
         }
     }
 }
-
-
-And the simple test function:
-
-; Add this button to your GUI for testing
-Gui, Add, Button, gSimpleTest x370 y380 w100 h25, Simple Test
-
-SimpleTest:
-    if (CurrentGameId = "") {
-        MsgBox, 48, No Selection, Please select a game first.
-        return
-    }
-
-    ; Test 1: Check if the column exists and what type it is
-    sql1 := "SELECT sql FROM sqlite_master WHERE type='table' AND name='games'"
-    if db.GetTable(sql1, result1) {
-        if result1.GetRow(1, row) {
-            createSql := row[1]
-            MsgBox, 0, Table Definition, %createSql%
-        }
-    }
-
-    ; Test 2: Try inserting a simple hex value
-    StringReplace, escapedGameId, CurrentGameId, ', '', All
-    testSql := "UPDATE games SET IconBlob = X'48656C6C6F' WHERE GameId = '" . escapedGameId . "'"
-
-    MsgBox, 4, Test Simple HEX, Try simple HEX update?`nSQL: %testSql%`n(This will set IconBlob to "Hello" in hex)
-    IfMsgBox, Yes
-    {
-        if db.Exec(testSql) {
-            changes := db.Changes
-            MsgBox, 64, Test Success, Simple HEX insert worked! Changes: %changes%
-            Gosub, GameSelected
-        } else {
-            errMsg := db.ErrorMsg
-            MsgBox, 16, Test Failed, Simple HEX failed: %errMsg%
-        }
-    }
-return
-The key AHK v1 syntax fixes:
-
-Removed parentheses around conditions in if statements
-Used proper IfMsgBox syntax
-Fixed variable references in MsgBox
-
-
-
----------------------------
-Debug SQL
----------------------------
-SQL Preview: UPDATE games SET IconBlob = X'Կ9ҫE×DØA000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000...
-
-Hex length: 200
-Test data length: 100
-
-Proceed?
----------------------------
-Yes   No
----------------------------
-
----------------------------
-Exec Result
----------------------------
-Result:
-ErrorMsg:
-ErrorCode:
-Changes:
----------------------------
-OK
----------------------------
----------------------------
-Database Error
----------------------------
-HEX method failed with no specific error message
----------------------------
-OK
----------------------------
-
-
