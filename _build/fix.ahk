@@ -18,38 +18,54 @@ FileCreateDir, %IconsFolder%
 Gui, Font, s10, Segoe UI
 
 ; Search/Select Game section
-Gui, Add, GroupBox, x10 y10 w480 h100, Select Game
+Gui, Add, GroupBox, x10 y10 w480 h120, Select Game
 Gui, Add, Text, x20 y30, Search game:
 Gui, Add, Edit, vSearchTerm x20 y50 w200 h20
 Gui, Add, Button, gSearchGames x230 y50 w60 h20, Search
 Gui, Add, ComboBox, vGameSelect x20 y75 w400 h200 gGameSelected, Select a game...
+Gui, Add, Text, vTotalGames x20 y105 w450 h20, Total games in database: Loading...
 
 ; Current Game Info section
-Gui, Add, GroupBox, x10 y120 w480 h120, Current Game Info
-Gui, Add, Text, x20 y140, Selected Game:
-Gui, Add, Text, vSelectedGame x20 y155 w450 h20, None selected
-Gui, Add, Text, x20 y175, Current Icon Path:
-Gui, Add, Text, vCurrentIconPath x20 y190 w450 h20, -
-Gui, Add, Text, x20 y205, Icon in rpcl3_icons:
-Gui, Add, Text, vIconInFolder x20 y220 w200 h20, Checking...
+Gui, Add, GroupBox, x10 y140 w480 h120, Current Game Info
+Gui, Add, Text, x20 y160, Selected Game:
+Gui, Add, Text, vSelectedGame x20 y175 w450 h20, None selected
+Gui, Add, Text, x20 y195, Current Icon Path:
+Gui, Add, Text, vCurrentIconPath x20 y210 w450 h20, -
+Gui, Add, Text, x20 y225, Icon in rpcl3_icons:
+Gui, Add, Text, vIconInFolder x20 y240 w200 h20, Checking...
 
 ; Icon Preview section
-Gui, Add, GroupBox, x10 y250 w240 h150, Current Icon Preview
-Gui, Add, Picture, vCurrentIcon x20 y270 w220 h100,
-Gui, Add, Text, vIconStatus x20 y375 w200 h20, No icon loaded
+Gui, Add, GroupBox, x10 y270 w240 h150, Current Icon Preview
+Gui, Add, Picture, vCurrentIcon x20 y290 w220 h100 gShowPic1, ; Added gShowPic1 to make icon clickable
+Gui, Add, Text, vIconStatus x20 y395 w200 h20, No icon loaded
 
 ; Icon Actions section
-Gui, Add, GroupBox, x260 y250 w230 h150, Icon Actions
-Gui, Add, Button, gCopyExistingIcon x270 y270 w200 h30, Copy Existing Icon to Folder
-Gui, Add, Button, gBrowseAndCopyIcon x270 y310 w200 h30, Browse & Copy New Icon
-Gui, Add, Button, gDeleteIconFromFolder x270 y350 w200 h30, Delete Icon from Folder
+Gui, Add, GroupBox, x260 y270 w230 h150, Icon Actions
+Gui, Add, Button, gCopyExistingIcon x270 y290 w200 h30, Copy Existing Icon to Folder
+Gui, Add, Button, gBrowseAndCopyIcon x270 y330 w200 h30, Browse & Copy New Icon
+Gui, Add, Button, gDeleteIconFromFolder x270 y370 w200 h30, Delete Icon from Folder
 
 ; Progress section
-Gui, Add, GroupBox, x10 y410 w480 h80, Status
-Gui, Add, Text, vStatusText x20 y430 w450 h40, Ready. Select a game to manage its icon.
+Gui, Add, GroupBox, x10 y430 w480 h80, Status
+Gui, Add, Text, vStatusText x20 y450 w450 h40, Ready. Select a game to manage its icon.
 
-Gui, Show, w500 h500, Icon Manager
+Gui, Show, w500 h520, Icon Manager
+
+; Load total game count on startup
+LoadTotalGames()
 return
+
+LoadTotalGames() {
+    sql := "SELECT COUNT(*) FROM games"
+    if db.GetTable(sql, result) {
+        if result.GetRow(1, row) {
+            totalCount := row[1]
+            GuiControl,, TotalGames, Total games in database: %totalCount%
+        }
+    } else {
+        GuiControl,, TotalGames, Total games in database: Error loading count
+    }
+}
 
 SearchGames:
     Gui, Submit, NoHide
@@ -100,9 +116,9 @@ GameSelected:
     StringSplit, parts, GameSelect, %A_Space%-%A_Space%
     selectedGameId := parts1
 
-    ; Get detailed game info
+    ; Get detailed game info - now including Pic1
     StringReplace, escapedGameId, selectedGameId, ', '', All
-    sql := "SELECT GameId, GameTitle, Icon0 FROM games WHERE GameId = '" . escapedGameId . "'"
+    sql := "SELECT GameId, GameTitle, Icon0, Pic1 FROM games WHERE GameId = '" . escapedGameId . "'"
 
     if !db.GetTable(sql, result) {
         MsgBox, 16, Query Error, Failed to get game details
@@ -118,6 +134,7 @@ GameSelected:
     CurrentGameId := row[1]
     CurrentGameTitle := row[2]
     CurrentIcon0Path := row[3]
+    CurrentPic1Path := row[4]  ; Store Pic1 path
 
     ; Build the full path to the original icon file
     if (CurrentIcon0Path != "") {
@@ -125,6 +142,14 @@ GameSelected:
         CurrentIconPath := A_ScriptDir . "\" . CurrentIcon0Path
     } else {
         CurrentIconPath := ""
+    }
+
+    ; Build the full path to Pic1 file
+    if (CurrentPic1Path != "") {
+        CurrentPic1Path := LTrim(CurrentPic1Path, "\/")
+        CurrentPic1FullPath := A_ScriptDir . "\" . CurrentPic1Path
+    } else {
+        CurrentPic1FullPath := ""
     }
 
     ; Check for icon in rpcl3_icons folder - explicit path building
@@ -139,7 +164,7 @@ GameSelected:
         FileGetSize, iconSize, %IconInFolder%
         GuiControl,, IconInFolder, Yes (%iconSize% bytes)
         GuiControl,, CurrentIcon, %IconInFolder%
-        GuiControl,, IconStatus, From rpcl3_icons folder
+        GuiControl,, IconStatus, From rpcl3_icons folder (click to view Pic1)
     } else {
         GuiControl,, IconInFolder, No
 
@@ -147,7 +172,7 @@ GameSelected:
         if (CurrentIconPath != "" && FileExist(CurrentIconPath)) {
             GuiControl,, CurrentIcon, %CurrentIconPath%
             statusText := "From original location: " . CurrentIconPath
-            GuiControl,, IconStatus, %statusText%
+            GuiControl,, IconStatus, %statusText% (click to view Pic1)
         } else {
             GuiControl,, CurrentIcon,
             if (CurrentIconPath != "") {
@@ -160,6 +185,47 @@ GameSelected:
     }
 
     GuiControl,, StatusText, Game selected: %CurrentGameTitle%
+return
+
+ShowPic1:
+    ; Function called when icon is clicked
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Game Selected, Please select a game first.
+        return
+    }
+
+    if (CurrentPic1FullPath = "") {
+        MsgBox, 48, No Pic1 Path, No Pic1 path found in database for this game.
+        return
+    }
+
+    if !FileExist(CurrentPic1FullPath) {
+        MsgBox, 48, File Not Found, Pic1 file not found:`n%CurrentPic1FullPath%
+        return
+    }
+
+    ; Create new window to show Pic1
+    Gui, Pic1:New, +Resize, %CurrentGameTitle% - Pic1
+    Gui, Pic1:Font, s10, Segoe UI
+
+    ; Get image dimensions for proper sizing
+    FileGetSize, pic1Size, %CurrentPic1FullPath%
+
+    ; Add picture control - let it auto-size initially
+    Gui, Pic1:Add, Picture, x10 y10 w600 h400 vPic1Image, %CurrentPic1FullPath%
+
+    ; Add info text
+    infoText := "Game: " . CurrentGameTitle . " (" . CurrentGameId . ")"
+    infoText .= "`nPic1 Path: " . CurrentPic1FullPath
+    infoText .= "`nFile Size: " . pic1Size . " bytes"
+    Gui, Pic1:Add, Text, x10 y420 w600 h60 vPic1Info, %infoText%
+
+    ; Show the window
+    Gui, Pic1:Show, w620 h490
+return
+
+Pic1GuiClose:
+    Gui, Pic1:Destroy
 return
 
 CopyExistingIcon:
@@ -260,7 +326,7 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
 
     GuiControl,, IconInFolder, Yes (%destSize% bytes)
     GuiControl,, CurrentIcon, %destPath%
-    GuiControl,, IconStatus, Copied to rpcl3_icons folder
+    GuiControl,, IconStatus, Copied to rpcl3_icons folder (click to view Pic1)
 
     successMsg := "Icon successfully copied!"
     successMsg .= "`nTo: " . destPath
@@ -327,3 +393,5 @@ return
 GuiClose:
     db.CloseDB()
 ExitApp
+
+
