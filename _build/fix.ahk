@@ -1,107 +1,91 @@
-#SingleInstance Force
-#NoEnv
-#Include SQLiteDB.ahk
+Let's try creating the BLOB array exactly as expected, but with some debug output:
 
-; Simple test to update game title
-db := new SQLiteDB()
+SaveIconWithCorrectBlobFormat(iconPath, gameId, gameTitle) {
+    GuiControl,, StatusText, Trying correct BLOB format...
 
-; Try to open the database
-if !db.OpenDB("games.db") {
-    err := db.ErrorMsg
-    MsgBox, 16, DB Error, Failed to open games.db`n%err%
-    ExitApp
-}
-
-MsgBox, 64, DB Opened, Database opened successfully!
-
-; First, let's see what games we have
-MsgBox, 4, List Games, Show first 5 games in database?
-IfMsgBox, Yes
-{
-    sql := "SELECT GameId, GameTitle FROM games LIMIT 5"
-    if db.GetTable(sql, result) {
-        gameList := "Games found:`n`n"
-        Loop, % result.RowCount {
-            if result.GetRow(A_Index, row) {
-                gameId := row[1]
-                gameTitle := row[2]
-                gameList .= gameId . " - " . gameTitle . "`n"
-            }
-        }
-        MsgBox, 0, Games List, %gameList%
-    } else {
-        errMsg := db.ErrorMsg
-        MsgBox, 16, Query Failed, Failed to get games: %errMsg%
-        ExitApp
+    ; Read file data
+    file := FileOpen(iconPath, "r")
+    if (!file) {
+        MsgBox, 16, File Error, Could not open file: %iconPath%
+        return
     }
-}
 
-; Now let's try to update a specific game
-InputBox, targetGameId, Game ID, Enter the GameId you want to test (e.g. BLUS30001):, , 300, 120
+    ; Read small test amount
+    testSize := 100
+    VarSetCapacity(iconData, testSize)
+    bytesRead := file.RawRead(iconData, testSize)
+    file.Close()
 
-if (ErrorLevel || targetGameId = "") {
-    MsgBox, 48, Cancelled, Test cancelled
-    db.CloseDB()
-    ExitApp
-}
+    ; Create BLOB array exactly as the class expects
+    blobArray := {}
+    blobArray[1] := {Addr: &iconData, Size: bytesRead}
 
-; First verify the game exists
-checkSql := "SELECT GameTitle FROM games WHERE GameId = '" . targetGameId . "'"
-if db.GetTable(checkSql, checkResult) {
-    if (checkResult.RowCount = 0) {
-        MsgBox, 16, Game Not Found, GameId '%targetGameId%' not found in database
-        db.CloseDB()
-        ExitApp
-    } else {
-        if checkResult.GetRow(1, checkRow) {
-            currentTitle := checkRow[1]
-            MsgBox, 0, Game Found, Current title: %currentTitle%
-        }
-    }
-} else {
+    ; Debug the blob array structure
+    addr := blobArray[1].Addr
+    size := blobArray[1].Size
+
+    MsgBox, 0, Debug BLOB Array, Address: %addr%`nSize: %size%`nBytes read: %bytesRead%`n`nAddr exists: %!!addr%`nSize exists: %!!size%
+
+    ; Prepare SQL
+    StringReplace, escapedGameId, gameId, ', '', All
+    updateSql := "UPDATE games SET IconBlob = ? WHERE GameId = '" . escapedGameId . "'"
+
+    MsgBox, 4, Ready to Store, SQL: %updateSql%`n`nCall StoreBLOB?
+    IfMsgBox, No
+        return
+
+    ; Clear errors
+    db.ErrorMsg := ""
+    db.ErrorCode := 0
+
+    ; Call StoreBLOB with debug
+    MsgBox, 0, Calling StoreBLOB, About to call db.StoreBLOB()...
+
+    result := db.StoreBLOB(updateSql, blobArray)
+
+    ; Get all possible error information
     errMsg := db.ErrorMsg
-    MsgBox, 16, Check Failed, Could not check if game exists: %errMsg%
-    db.CloseDB()
-    ExitApp
-}
+    errCode := db.ErrorCode
+    changes := db.Changes
 
-; Now try the update
-newTitle := "TEST UPDATED TITLE " . A_Now
-updateSql := "UPDATE games SET GameTitle = '" . newTitle . "' WHERE GameId = '" . targetGameId . "'"
+    MsgBox, 0, StoreBLOB Complete, StoreBLOB returned: %result%`nErrorMsg: '%errMsg%'`nErrorCode: %errCode%`nChanges: %changes%
 
-MsgBox, 4, Confirm Update, SQL: %updateSql%`n`nExecute this update?
-IfMsgBox, No
-{
-    db.CloseDB()
-    ExitApp
-}
-
-; Execute the update
-MsgBox, 0, Executing, Executing update...
-
-result := db.Exec(updateSql)
-changes := db.Changes
-errMsg := db.ErrorMsg
-errCode := db.ErrorCode
-
-; Show results
-MsgBox, 0, Update Results, Result: %result%`nChanges: %changes%`nErrorMsg: %errMsg%`nErrorCode: %errCode%
-
-if (changes > 0) {
-    MsgBox, 64, Success!, Update successful! %changes% row(s) changed.
-
-    ; Verify the change
-    if db.GetTable(checkSql, verifyResult) {
-        if verifyResult.GetRow(1, verifyRow) {
-            updatedTitle := verifyRow[1]
-            MsgBox, 0, Verification, New title: %updatedTitle%
-        }
+    ; The StoreBLOB method should return True on success
+    ; Let's check what we actually got
+    if (result == true || result == 1 || result == "1") {
+        MsgBox, 64, BLOB Success, StoreBLOB succeeded! Result was: %result%
+        GuiControl,, StatusText, Success: BLOB saved
+        Gosub, GameSelected
+    } else if (errMsg != "") {
+        MsgBox, 16, BLOB Error, StoreBLOB failed with error: %errMsg%
+    } else if (changes = 0) {
+        MsgBox, 48, No Changes, StoreBLOB executed but made no changes
+    } else {
+        MsgBox, 16, BLOB Unknown, StoreBLOB result unclear`nResult: %result%`nType: %typeof(result)%
     }
-} else {
-    MsgBox, 16, Update Failed, Update failed or no rows affected
 }
+And modify one of your buttons to test this:
 
-; Cleanup
-db.CloseDB()
-MsgBox, 0, Test Complete, Test complete. Database closed.
-ExitApp
+SaveExistingIcon:
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Selection, Please select a game first.
+        return
+    }
+
+    if (CurrentIconPath = "" || !FileExist(CurrentIconPath)) {
+        MsgBox, 48, No File, No existing icon file found for this game.`n`nExpected location: %CurrentIconPath%
+        return
+    }
+
+    ; Confirm action
+    MsgBox, 4, Confirm Save, Try the corrected BLOB format method?`n`nFile: %CurrentIconPath%`nGame: %CurrentGameTitle%
+
+    IfMsgBox, No
+        return
+
+    SaveIconWithCorrectBlobFormat(CurrentIconPath, CurrentGameId, CurrentGameTitle)
+return
+This will give us detailed debug information about exactly what's happening in the StoreBLOB call. If this still doesn't work, we'll know that your SQLiteDB class has some other specific requirement or bug in its BLOB handling.
+
+The alternative would be to store the icons as Base64 text (which we know works since regular text updates work), but let's try this corrected BLOB format first.
+
