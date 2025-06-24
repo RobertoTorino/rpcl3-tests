@@ -10,7 +10,7 @@ if !db.OpenDB(A_ScriptDir . "\games.db") {
     ExitApp
 }
 
-; Create icons folder if it doesn't exist - CORRECTED NAME
+; Create icons folder if it doesn't exist - CORRECTED path building
 IconsFolder := A_ScriptDir . "\rpcl3_icons"
 FileCreateDir, %IconsFolder%
 
@@ -172,8 +172,8 @@ GameListSelect:
         LV_GetText(selectedGameId, selectedRow, 1)
         LV_GetText(selectedGameTitle, selectedRow, 2)
 
-        ; Check for icon in rpcl3_icons folder
-        iconPath := IconsFolder . "\" . selectedGameId . ".PNG"
+        ; Check for icon in rpcl3_icons folder - explicit path building
+        iconPath := A_ScriptDir . "\rpcl3_icons\" . selectedGameId . ".PNG"
 
         if FileExist(iconPath) {
             FileGetSize, iconSize, %iconPath%
@@ -230,8 +230,8 @@ GameSelected:
         CurrentIconPath := ""
     }
 
-    ; Check for icon in rpcl3_icons folder (with uppercase .PNG)
-    IconInFolder := IconsFolder . "\" . CurrentGameId . ".PNG"
+    ; Check for icon in rpcl3_icons folder - explicit path building
+    IconInFolder := A_ScriptDir . "\rpcl3_icons\" . CurrentGameId . ".PNG"
 
     ; Update GUI
     GuiControl,, SelectedGame, %CurrentGameId% - %CurrentGameTitle%
@@ -310,76 +310,37 @@ return
 CopyIconToFolder(sourcePath, gameId, gameTitle) {
     GuiControl,, StatusText, Copying icon to rpcl3_icons folder...
 
-    ; Create destination path with uppercase .PNG extension
-    destPath := IconsFolder . "\" . gameId . ".PNG"
+    ; Build the icons folder path explicitly in the function
+    iconsDir := A_ScriptDir . "\rpcl3_icons"
+    destPath := iconsDir . "\" . gameId . ".PNG"
 
-    ; First, let's see what the actual paths are
-    scriptDir := A_ScriptDir
-    debugMsg := "Script Directory: " . scriptDir
-    debugMsg .= "`nIconsFolder Variable: " . IconsFolder
+    ; Debug the paths
+    debugMsg := "Script Directory: " . A_ScriptDir
+    debugMsg .= "`nIcons Directory: " . iconsDir
     debugMsg .= "`nSource: " . sourcePath
     debugMsg .= "`nDestination: " . destPath
+    debugMsg .= "`n`nSource exists: " . FileExist(sourcePath)
 
-    MsgBox, 0, Path Debug, %debugMsg%
-
-    ; Check if the script directory exists and is writable
-    if !FileExist(A_ScriptDir) {
-        MsgBox, 16, Script Dir Error, Script directory does not exist: %A_ScriptDir%
-        return
-    }
-
-    ; Try to create the folder with full error checking
-    MsgBox, 4, Create Folder, About to create folder: %IconsFolder%`n`nProceed?
+    MsgBox, 4, Debug Paths, %debugMsg%`n`nProceed with copy?
     IfMsgBox, No
         return
 
-    ; Method 1: Try FileCreateDir
-    FileCreateDir, %IconsFolder%
-    createError := ErrorLevel
+    ; Create the icons directory
+    FileCreateDir, %iconsDir%
 
-    ; Check if it was created
-    folderExists := FileExist(IconsFolder)
-
-    checkMsg := "FileCreateDir ErrorLevel: " . createError
-    checkMsg .= "`nFolder exists after create: " . folderExists
-    checkMsg .= "`nChecking path: " . IconsFolder
-    MsgBox, 0, Create Result, %checkMsg%
-
-    ; If FileCreateDir failed, try alternative method
-    if (!folderExists) {
-        MsgBox, 4, Try Alternative, FileCreateDir failed. Try alternative method using RunWait?
-        IfMsgBox, Yes
-        {
-            ; Use Windows mkdir command
-            RunWait, cmd.exe /c mkdir "%IconsFolder%", , Hide
-
-            ; Check again
-            folderExists := FileExist(IconsFolder)
-            MsgBox, 0, Alternative Result, Folder exists after mkdir: %folderExists%
-        }
-    }
-
-    ; Final check
-    if !FileExist(IconsFolder) {
-        finalMsg := "Could not create rpcl3_icons folder"
-        finalMsg .= "`nPath attempted: " . IconsFolder
-        finalMsg .= "`nScript directory: " . A_ScriptDir
-        finalMsg .= "`nScript directory exists: " . FileExist(A_ScriptDir)
-        MsgBox, 16, Folder Creation Failed, %finalMsg%
+    ; Verify folder was created
+    if !FileExist(iconsDir) {
+        MsgBox, 16, Folder Error, Could not create icons folder: %iconsDir%
         return
     }
 
-    MsgBox, 64, Folder Success, Folder created successfully! Proceeding with file copy...
-
-    ; Continue with the rest of the copy process...
-    ; Check source file
-    sourceExists := FileExist(sourcePath)
-    if (!sourceExists) {
+    ; Check source file exists
+    if !FileExist(sourcePath) {
         MsgBox, 16, Source Error, Source file does not exist: %sourcePath%
         return
     }
 
-    ; Delete destination if it exists
+    ; Delete destination if it exists to ensure clean copy
     if FileExist(destPath) {
         FileDelete, %destPath%
     }
@@ -400,12 +361,11 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
 
     ; Verify the file was actually copied
     if !FileExist(destPath) {
-        MsgBox, 16, Copy Verification Failed, Copy reported success but destination file not found: %destPath%
+        MsgBox, 16, Copy Verification Failed, File not found after copy: %destPath%
         return
     }
 
-    ; Get file sizes to verify copy
-    FileGetSize, sourceSize, %sourcePath%
+    ; Get file size
     FileGetSize, destSize, %destPath%
 
     ; Success
@@ -416,7 +376,8 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     GuiControl,, CurrentIcon, %destPath%
     GuiControl,, IconStatus, Copied to rpcl3_icons folder
 
-    successMsg := "Icon successfully copied to rpcl3_icons folder as " . gameId . ".PNG!"
+    successMsg := "Icon successfully copied!"
+    successMsg .= "`nTo: " . destPath
     successMsg .= "`nSize: " . destSize . " bytes"
     MsgBox, 64, Success, %successMsg%
 
@@ -424,16 +385,14 @@ CopyIconToFolder(sourcePath, gameId, gameTitle) {
     Gosub, GameSelected
 }
 
-
-
 DeleteIconFromFolder:
     if (CurrentGameId = "") {
         MsgBox, 48, No Selection, Please select a game first.
         return
     }
 
-    ; Check if icon exists in folder (uppercase .PNG)
-    IconInFolder := IconsFolder . "\" . CurrentGameId . ".PNG"
+    ; Check if icon exists in folder - explicit path building
+    IconInFolder := A_ScriptDir . "\rpcl3_icons\" . CurrentGameId . ".PNG"
     if !FileExist(IconInFolder) {
         MsgBox, 48, No Icon, No icon found in rpcl3_icons folder for this game.`nLooking for: %IconInFolder%
         return
@@ -474,6 +433,9 @@ DeleteIconFromFolder:
     }
 
     MsgBox, 64, Success, Icon deleted from rpcl3_icons folder
+
+    ; Refresh display
+    Gosub, GameSelected
 return
 
 GuiClose:
