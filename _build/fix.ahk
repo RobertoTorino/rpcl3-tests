@@ -56,14 +56,35 @@ LoadTotalGames()
 return
 
 LoadTotalGames() {
-    sql := "SELECT COUNT(*) FROM games"
-    if db.GetTable(sql, result) {
-        if result.GetRow(1, row) {
-            totalCount := row[1]
-            GuiControl,, TotalGames, Total games in database: %totalCount%
-        }
+    sql := "SELECT COUNT(GameId) FROM games"
+
+    ; Debug the query
+    MsgBox, 4, Debug Count Query, SQL: %sql%`n`nProceed with count query?
+    IfMsgBox, No
+        return
+
+    if !db.GetTable(sql, result) {
+        errMsg := db.ErrorMsg
+        GuiControl,, TotalGames, Total games in database: Error - %errMsg%
+        MsgBox, 16, Count Error, Failed to get game count: %errMsg%
+        return
+    }
+
+    ; Debug the result
+    rowCount := result.RowCount
+    MsgBox, 0, Debug Count Result, Query returned %rowCount% rows
+
+    if (result.RowCount = 0) {
+        GuiControl,, TotalGames, Total games in database: No results returned
+        return
+    }
+
+    if result.GetRow(1, row) {
+        totalCount := row[1]
+        MsgBox, 0, Debug Count Value, Count value: %totalCount%
+        GuiControl,, TotalGames, Total games in database: %totalCount%
     } else {
-        GuiControl,, TotalGames, Total games in database: Error loading count
+        GuiControl,, TotalGames, Total games in database: Error getting row data
     }
 }
 
@@ -212,16 +233,49 @@ ShowPic1:
     FileGetSize, pic1Size, %CurrentPic1FullPath%
 
     ; Add picture control - let it auto-size initially
-    Gui, Pic1:Add, Picture, x10 y10 w600 h400 vPic1Image, %CurrentPic1FullPath%
+    Gui, Pic1:Add, Picture, x10 y10 w600 h400 vPic1Image gShowPic1Fullscreen, %CurrentPic1FullPath%
 
     ; Add info text
     infoText := "Game: " . CurrentGameTitle . " (" . CurrentGameId . ")"
     infoText .= "`nPic1 Path: " . CurrentPic1FullPath
     infoText .= "`nFile Size: " . pic1Size . " bytes"
+    infoText .= "`n`nClick image to view fullscreen (ESC to close fullscreen)"
     Gui, Pic1:Add, Text, x10 y420 w600 h60 vPic1Info, %infoText%
 
     ; Show the window
     Gui, Pic1:Show, w620 h490
+return
+
+ShowPic1Fullscreen:
+    ; Create fullscreen window
+    Gui, Fullscreen:New, -Caption -Border +AlwaysOnTop, Fullscreen Viewer
+    Gui, Fullscreen:Color, Black
+
+    ; Get screen dimensions
+    SysGet, ScreenWidth, 78
+    SysGet, ScreenHeight, 79
+
+    ; Add picture control to fill screen
+    Gui, Fullscreen:Add, Picture, x0 y0 w%ScreenWidth% h%ScreenHeight% vFullscreenImage, %CurrentPic1FullPath%
+
+    ; Add instructions
+    Gui, Fullscreen:Add, Text, x10 y10 w300 h30 cWhite BackgroundTrans, Press ESC to close fullscreen
+
+    ; Show fullscreen
+    Gui, Fullscreen:Show, x0 y0 w%ScreenWidth% h%ScreenHeight%
+
+    ; Set up ESC key hotkey to close fullscreen
+    Hotkey, Escape, CloseFullscreen, On
+return
+
+CloseFullscreen:
+    Hotkey, Escape, CloseFullscreen, Off
+    Gui, Fullscreen:Destroy
+return
+
+FullscreenGuiClose:
+    Hotkey, Escape, CloseFullscreen, Off
+    Gui, Fullscreen:Destroy
 return
 
 Pic1GuiClose:
@@ -393,5 +447,3 @@ return
 GuiClose:
     db.CloseDB()
 ExitApp
-
-
