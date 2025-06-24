@@ -1,39 +1,55 @@
-; Add this test function to debug the database
+ Add this test function to debug the database - AHK v1 compatible
 TestDatabaseConnection() {
     ; Test 1: Check if we can do a simple SELECT
     sql1 := "SELECT COUNT(*) FROM games"
     if (db.GetTable(sql1, result1)) {
-        result1.GetRow(1, row)
-        gameCount := row[1]
-        MsgBox, 0, Test 1, Games table accessible. Count: %gameCount%
+        if result1.GetRow(1, row) {
+            gameCount := row[1]
+            MsgBox, 0, Test 1, Games table accessible. Count: %gameCount%
+        } else {
+            MsgBox, 16, Test 1 Failed, Cannot get row from games table
+            return
+        }
     } else {
-        MsgBox, 16, Test 1 Failed, Cannot access games table: %db.ErrorMsg%
+        errMsg := db.ErrorMsg
+        MsgBox, 16, Test 1 Failed, Cannot access games table: %errMsg%
         return
     }
 
     ; Test 2: Check table structure
     sql2 := "PRAGMA table_info(games)"
     if (db.GetTable(sql2, result2)) {
-        MsgBox, 0, Test 2, Table structure query successful. Columns: %result2.RowCount%
+        rowCount := result2.RowCount
+        MsgBox, 0, Test 2, Table structure query successful. Columns: %rowCount%
         columnInfo := ""
-        Loop, % result2.RowCount {
-            result2.GetRow(A_Index, row)
-            columnInfo .= row[2] . " (" . row[3] . "), "  ; name (type)
+        Loop, %rowCount% {
+            if result2.GetRow(A_Index, row) {
+                columnName := row[2]
+                columnType := row[3]
+                columnInfo .= columnName . " (" . columnType . "), "
+            }
         }
         MsgBox, 0, Column Info, %columnInfo%
     } else {
-        MsgBox, 16, Test 2 Failed, Cannot get table info: %db.ErrorMsg%
+        errMsg := db.ErrorMsg
+        MsgBox, 16, Test 2 Failed, Cannot get table info: %errMsg%
         return
     }
 
     ; Test 3: Check if we can do a simple UPDATE without BLOB
-    StringReplace, escapedGameId, CurrentGameId, ', '', All
-    sql3 := "UPDATE games SET Icon0 = 'test_update' WHERE GameId = '" . escapedGameId . "'"
-    if (db.Exec(sql3)) {
-        MsgBox, 0, Test 3, Simple UPDATE works. Changes: %db.Changes%
+    if (CurrentGameId = "") {
+        MsgBox, 48, Test 3 Skipped, No game selected - cannot test UPDATE
     } else {
-        MsgBox, 16, Test 3 Failed, Simple UPDATE failed: %db.ErrorMsg%
-        return
+        StringReplace, escapedGameId, CurrentGameId, ', '', All
+        sql3 := "UPDATE games SET Icon0 = 'test_update' WHERE GameId = '" . escapedGameId . "'"
+        if (db.Exec(sql3)) {
+            changes := db.Changes
+            MsgBox, 0, Test 3, Simple UPDATE works. Changes: %changes%
+        } else {
+            errMsg := db.ErrorMsg
+            MsgBox, 16, Test 3 Failed, Simple UPDATE failed: %errMsg%
+            return
+        }
     }
 
     ; Test 4: Try to prepare a simple statement
@@ -43,22 +59,14 @@ TestDatabaseConnection() {
         MsgBox, 0, Test 4, Simple prepare statement works
         stmt.Free()
     } else {
-        MsgBox, 16, Test 4 Failed, Simple prepare failed: %db.ErrorMsg%
+        errMsg := db.ErrorMsg
+        MsgBox, 16, Test 4 Failed, Simple prepare failed: %errMsg%
         return
     }
 
     MsgBox, 0, All Tests, All basic database tests passed
 }
-Add a button to test this:
-
-; Add this button in your GUI section
-Gui, Add, Button, gTestDB x270 y380 w100 h25, Test DB
-
-; Add this label
-TestDB:
-    TestDatabaseConnection()
-return
-Also, let's try a completely different approach using direct SQL execution with hex encoding:
+Also, here's the corrected HEX method for AHK v1:
 
 SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon as HEX...
@@ -72,9 +80,15 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
 
     ; Convert binary data to hex string
     hexString := ""
-    Loop, % StrLen(iconBinary) {
-        byte := Asc(SubStr(iconBinary, A_Index, 1))
-        hexString .= Format("{:02X}", byte)
+    iconLength := StrLen(iconBinary)
+    Loop, %iconLength% {
+        charCode := Asc(SubStr(iconBinary, A_Index, 1))
+        ; Convert to hex - AHK v1 doesn't have Format function
+        hexByte := ""
+        if (charCode < 16)
+            hexByte := "0"
+        hexByte .= DEC2Hex(charCode)
+        hexString .= hexByte
     }
 
     ; Create SQL with hex literal
@@ -101,10 +115,27 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
         MsgBox, 16, Database Error, HEX method failed:`n%errMsg%
     }
 }
-Try these steps:
 
-First run the database test to make sure everything basic is working
-If the tests pass, try the HEX method which uses SQLite's X'hexdata' syntax to insert binary data
-The HEX method is often more reliable because it doesn't rely on memory pointers or BLOB binding - it just creates a SQL string with the binary data encoded as hexadecimal.
+; Helper function to convert decimal to hex (AHK v1)
+DEC2Hex(dec) {
+    Static hexDigits := "0123456789ABCDEF"
+    if (dec = 0)
+        return "0"
 
-Let me know what the database tests show and if the HEX method works!
+    result := ""
+    while (dec > 0) {
+        remainder := Mod(dec, 16)
+        result := SubStr(hexDigits, remainder + 1, 1) . result
+        dec := dec // 16
+    }
+    return result
+}
+And add the test button to your GUI:
+
+; Add this button in your GUI section (in the Icon Actions section)
+Gui, Add, Button, gTestDB x270 y380 w100 h25, Test DB
+
+; Add this label
+TestDB:
+    TestDatabaseConnection()
+return
