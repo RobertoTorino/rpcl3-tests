@@ -1,73 +1,3 @@
- Add this test function to debug the database - AHK v1 compatible
-TestDatabaseConnection() {
-    ; Test 1: Check if we can do a simple SELECT
-    sql1 := "SELECT COUNT(*) FROM games"
-    if (db.GetTable(sql1, result1)) {
-        if result1.GetRow(1, row) {
-            gameCount := row[1]
-            MsgBox, 0, Test 1, Games table accessible. Count: %gameCount%
-        } else {
-            MsgBox, 16, Test 1 Failed, Cannot get row from games table
-            return
-        }
-    } else {
-        errMsg := db.ErrorMsg
-        MsgBox, 16, Test 1 Failed, Cannot access games table: %errMsg%
-        return
-    }
-
-    ; Test 2: Check table structure
-    sql2 := "PRAGMA table_info(games)"
-    if (db.GetTable(sql2, result2)) {
-        rowCount := result2.RowCount
-        MsgBox, 0, Test 2, Table structure query successful. Columns: %rowCount%
-        columnInfo := ""
-        Loop, %rowCount% {
-            if result2.GetRow(A_Index, row) {
-                columnName := row[2]
-                columnType := row[3]
-                columnInfo .= columnName . " (" . columnType . "), "
-            }
-        }
-        MsgBox, 0, Column Info, %columnInfo%
-    } else {
-        errMsg := db.ErrorMsg
-        MsgBox, 16, Test 2 Failed, Cannot get table info: %errMsg%
-        return
-    }
-
-    ; Test 3: Check if we can do a simple UPDATE without BLOB
-    if (CurrentGameId = "") {
-        MsgBox, 48, Test 3 Skipped, No game selected - cannot test UPDATE
-    } else {
-        StringReplace, escapedGameId, CurrentGameId, ', '', All
-        sql3 := "UPDATE games SET Icon0 = 'test_update' WHERE GameId = '" . escapedGameId . "'"
-        if (db.Exec(sql3)) {
-            changes := db.Changes
-            MsgBox, 0, Test 3, Simple UPDATE works. Changes: %changes%
-        } else {
-            errMsg := db.ErrorMsg
-            MsgBox, 16, Test 3 Failed, Simple UPDATE failed: %errMsg%
-            return
-        }
-    }
-
-    ; Test 4: Try to prepare a simple statement
-    sql4 := "SELECT GameId FROM games WHERE GameId = ?"
-    stmt := ""
-    if (db.Prepare(sql4, stmt)) {
-        MsgBox, 0, Test 4, Simple prepare statement works
-        stmt.Free()
-    } else {
-        errMsg := db.ErrorMsg
-        MsgBox, 16, Test 4 Failed, Simple prepare failed: %errMsg%
-        return
-    }
-
-    MsgBox, 0, All Tests, All basic database tests passed
-}
-Also, here's the corrected HEX method for AHK v1:
-
 SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon as HEX...
 
@@ -78,35 +8,54 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
         return
     }
 
-    ; Convert binary data to hex string
+    ; Convert binary data to hex string manually
     hexString := ""
     iconLength := StrLen(iconBinary)
+
+    ; Show progress for large files
+    if (iconLength > 50000) {
+        GuiControl,, StatusText, Converting to HEX... this may take a moment for large files
+    }
+
     Loop, %iconLength% {
         charCode := Asc(SubStr(iconBinary, A_Index, 1))
-        ; Convert to hex - AHK v1 doesn't have Format function
-        hexByte := ""
-        if (charCode < 16)
-            hexByte := "0"
-        hexByte .= DEC2Hex(charCode)
-        hexString .= hexByte
+
+        ; Manual hex conversion for AHK v1
+        hex1 := charCode // 16
+        hex2 := Mod(charCode, 16)
+
+        ; Convert to hex characters
+        if (hex1 < 10)
+            hexChar1 := Chr(48 + hex1)  ; 0-9
+        else
+            hexChar1 := Chr(55 + hex1)  ; A-F
+
+        if (hex2 < 10)
+            hexChar2 := Chr(48 + hex2)  ; 0-9
+        else
+            hexChar2 := Chr(55 + hex2)  ; A-F
+
+        hexString .= hexChar1 . hexChar2
     }
 
     ; Create SQL with hex literal
     StringReplace, escapedGameId, gameId, ', '', All
     updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . escapedGameId . "'"
 
+    GuiControl,, StatusText, Executing SQL update...
+
     if (db.Exec(updateSql)) {
         bytesOriginal := StrLen(iconBinary)
         statusText := "Success: Icon saved as HEX (" . bytesOriginal . " bytes)"
         GuiControl,, StatusText, %statusText%
 
-        iconText := "Yes (HEX: " . bytesOriginal . " bytes)"
+        iconText := "Yes (Size: " . bytesOriginal . " bytes)"
         GuiControl,, IconInDB, %iconText%
 
         GuiControl,, CurrentIcon, %iconPath%
-        GuiControl,, IconStatus, Saved as HEX
+        GuiControl,, IconStatus, Saved to database (HEX)
 
-        MsgBox, 64, Success, Icon saved as HEX literal!
+        MsgBox, 64, Success, Icon saved to database using HEX method!
         Gosub, GameSelected
 
     } else {
@@ -115,27 +64,48 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
         MsgBox, 16, Database Error, HEX method failed:`n%errMsg%
     }
 }
+Now, to test this, modify one of your existing buttons to use this method. Change the SaveIconToDatabase calls to SaveIconToDatabaseHex:
 
-; Helper function to convert decimal to hex (AHK v1)
-DEC2Hex(dec) {
-    Static hexDigits := "0123456789ABCDEF"
-    if (dec = 0)
-        return "0"
-
-    result := ""
-    while (dec > 0) {
-        remainder := Mod(dec, 16)
-        result := SubStr(hexDigits, remainder + 1, 1) . result
-        dec := dec // 16
+SaveExistingIcon:
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Selection, Please select a game first.
+        return
     }
-    return result
-}
-And add the test button to your GUI:
 
-; Add this button in your GUI section (in the Icon Actions section)
-Gui, Add, Button, gTestDB x270 y380 w100 h25, Test DB
+    if (CurrentIconPath = "" || !FileExist(CurrentIconPath)) {
+        MsgBox, 48, No File, No existing icon file found for this game.`n`nExpected location: %CurrentIconPath%
+        return
+    }
 
-; Add this label
-TestDB:
-    TestDatabaseConnection()
+    ; Confirm action
+    MsgBox, 4, Confirm Save, Save the existing icon file to database using HEX method?`n`nFile: %CurrentIconPath%`nGame: %CurrentGameTitle%
+
+    IfMsgBox, No
+        return
+
+    ; Use HEX method instead
+    SaveIconToDatabaseHex(CurrentIconPath, CurrentGameId, CurrentGameTitle)
+return
+
+BrowseAndSaveIcon:
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Selection, Please select a game first.
+        return
+    }
+
+    ; Browse for icon file
+    FileSelectFile, selectedIcon, 1, , Select icon file, Image Files (*.png; *.jpg; *.jpeg; *.bmp; *.gif)
+
+    if (selectedIcon = "") {
+        return
+    }
+
+    ; Confirm action
+    MsgBox, 4, Confirm Save, Save this icon to database using HEX method?`n`nFile: %selectedIcon%`nGame: %CurrentGameTitle%
+
+    IfMsgBox, No
+        return
+
+    ; Use HEX method instead
+    SaveIconToDatabaseHex(selectedIcon, CurrentGameId, CurrentGameTitle)
 return
