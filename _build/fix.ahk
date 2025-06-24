@@ -1,38 +1,15 @@
-Great! The hex conversion is now working correctly (I can see proper PNG header: 89504E47...). The issue now is that the SQL is executing but not updating any rows (`Changes: 0`), which means the `WHERE` clause isn't matching any records.
+The issue is that the GetTable method is failing. Let's simplify this and use a method that we know works (since your main search functionality works). Let me fix this:
 
-Let's debug the WHERE clause:
-
-```autohotkey
 SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     GuiControl,, StatusText, Saving icon as HEX...
 
-    ; First, let's verify the game exists
-    StringReplace, escapedGameId, gameId, ', '', All
-    testSql := "SELECT COUNT(*) FROM games WHERE GameId = '" . escapedGameId . "'"
-
-    if db.GetTable(testSql, testResult) {
-        if testResult.GetRow(1, testRow) {
-            gameCount := testRow[1]
-            if (gameCount = 0) {
-                MsgBox, 16, Game Not Found, Game ID '%escapedGameId%' not found in database!
-                return
-            } else {
-                MsgBox, 0, Game Found, Game ID '%escapedGameId%' exists in database (Count: %gameCount%)
-            }
-        }
-    } else {
-        MsgBox, 16, Query Error, Could not verify game exists
-        return
-    }
-
-    ; Read file size first
+    ; Read file and convert to hex
     FileGetSize, fileSize, %iconPath%
     if (ErrorLevel) {
         MsgBox, 16, File Error, Could not get file size: %iconPath%
         return
     }
 
-    ; Open file in binary mode
     file := FileOpen(iconPath, "r")
     if (!file) {
         MsgBox, 16, File Error, Could not open file: %iconPath%
@@ -47,7 +24,6 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     Loop, %testSize% {
         byte := file.ReadUChar()
 
-        ; Convert byte to 2-digit hex
         hex1 := byte // 16
         hex2 := Mod(byte, 16)
 
@@ -60,12 +36,11 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
 
     file.Close()
 
-    ; Create and show the exact SQL
-    updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . escapedGameId . "'"
+    ; Create SQL - let's try without escaping first
+    updateSql := "UPDATE games SET IconBlob = X'" . hexString . "' WHERE GameId = '" . gameId . "'"
 
-    ; Show the exact WHERE clause for debugging
-    whereClause := "WHERE GameId = '" . escapedGameId . "'"
-    MsgBox, 4, Debug WHERE, WHERE clause: %whereClause%`n`nOriginal GameId: %gameId%`nEscaped GameId: %escapedGameId%`n`nProceed with UPDATE?
+    ; Show debug info
+    MsgBox, 4, Debug Info, GameId: %gameId%`nGameTitle: %gameTitle%`nHex length: %StrLen(hexString)%`n`nSQL: %updateSql%`n`nProceed?
     IfMsgBox, No
         return
 
@@ -77,35 +52,63 @@ SaveIconToDatabaseHex(iconPath, gameId, gameTitle) {
     errMsg := db.ErrorMsg
     errCode := db.ErrorCode
 
-    MsgBox, 0, Full Result, Result: %result%`nChanges: %changes%`nErrorMsg: %errMsg%`nErrorCode: %errCode%
+    ; Show all results
+    MsgBox, 0, Exec Results, Result: %result%`nChanges: %changes%`nErrorMsg: %errMsg%`nErrorCode: %errCode%
 
-    if (changes > 0) {
-        GuiControl,, StatusText, Success: Icon saved as HEX (%testSize% bytes)
-        MsgBox, 64, Success, Icon saved! %changes% row(s) updated.
-        Gosub, GameSelected
-    } else if (changes = 0) {
-        MsgBox, 48, No Rows Updated, SQL executed successfully but 0 rows were updated.`nThis means the WHERE clause didn't match any records.`n`nCheck if GameId '%escapedGameId%' exists and matches exactly.
+    ; Try to determine success differently - check if we have a real result value
+    if (result = 1 || result = true || (errMsg = "" && errCode = 0)) {
+        if (changes > 0) {
+            GuiControl,, StatusText, SUCCESS: %changes% row(s) updated with HEX data
+            MsgBox, 64, Success, Icon saved successfully! %changes% row(s) updated.
+            Gosub, GameSelected
+        } else {
+            ; Even if changes=0, if no error occurred, the SQL was valid
+            MsgBox, 48, Warning, SQL executed without error but 0 rows updated.`nThis might mean the GameId doesn't match exactly.`n`nTry refreshing the game selection and try again.
+        }
     } else {
-        MsgBox, 16, Database Error, Update failed:`nError: %errMsg%`nCode: %errCode%
+        MsgBox, 16, Database Error, Update failed:`nResult: %result%`nError: %errMsg%`nCode: %errCode%
     }
 }
+Let's also try a direct test. Add this button to your GUI to test the exact same SQL that works in your game selection:
 
+; Add this button for testing
+Gui, Add, Button, gTestDirectSQL x20 y380 w100 h25, Test SQL
 
----------------------------
-Confirm Save
----------------------------
-Save this icon to database using HEX method?
+TestDirectSQL:
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Selection, Please select a game first.
+        return
+    }
 
-File: E:\TEKKEN-TAG-TOURNAMENT-2-TEST-ENV\games\Ridge Racer 7 [BLUS30001]\PS3_GAME\ICON0.PNG
-Game: Ridge Racer 7
----------------------------
-Yes   No
----------------------------
----------------------------
-Query Error
----------------------------
-Could not verify game exists
----------------------------
-OK
----------------------------
+    ; Use the exact same SQL format as your working GameSelected function
+    StringReplace, escapedGameId, CurrentGameId, ', '', All
+    testSQL := "SELECT GameId, GameTitle FROM games WHERE GameId = '" . escapedGameId . "'"
 
+    MsgBox, 0, Test SQL, Testing SQL: %testSQL%
+
+    if !db.GetTable(testSQL, result) {
+        errMsg := db.ErrorMsg
+        MsgBox, 16, SQL Test Failed, SQL test failed: %errMsg%
+        return
+    }
+
+    if (result.RowCount = 0) {
+        MsgBox, 48, No Results, SQL executed but found 0 rows
+        return
+    }
+
+    ; Show the result
+    if result.GetRow(1, row) {
+        foundId := row[1]
+        foundTitle := row[2]
+        MsgBox, 64, SQL Test Success, Found game:`nID: %foundId%`nTitle: %foundTitle%
+    }
+return
+Try both:
+
+First run the Test SQL button to make sure we can query the current game
+Then try the modified HEX method
+This will help us see if there's a difference between how the working code queries vs our update attempts.
+
+Type a message...
+ChatDPG can make mistakes; verify important information.
