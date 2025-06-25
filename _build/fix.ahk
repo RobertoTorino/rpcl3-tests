@@ -1,93 +1,113 @@
-The issue is that the image is positioned at x=0 but has a calculated width that doesn't account for proper centering.
-Let me fix the fullscreen image positioning:
+You need to position the Pic1 window to the right of the main GUI. Here's the fix:
 
-ShowPic1Fullscreen:
-    ; Store the current monitor number globally
-    if (!CurrentFullscreenMonitor)
-        CurrentFullscreenMonitor := 1
+ShowPic1:
+    ; Function called when icon is clicked
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Game Selected, Please select a game first.
+        return
+    }
 
-    ; Get monitor info
-    SysGet, MonitorCount, MonitorCount
-    SysGet, Monitor, Monitor, %CurrentFullscreenMonitor%
+    if (CurrentPic1FullPath = "") {
+        MsgBox, 48, No Pic1 Path, No Pic1 path found in database for this game.
+        return
+    }
 
-    ; Calculate dimensions
-    MonWidth := MonitorRight - MonitorLeft
-    MonHeight := MonitorBottom - MonitorTop
+    if !FileExist(CurrentPic1FullPath) {
+        MsgBox, 48, File Not Found, Pic1 file not found:`n%CurrentPic1FullPath%
+        return
+    }
 
-    ; Create fullscreen window
-    Gui, Fullscreen:New, -Caption -Border +AlwaysOnTop, Fullscreen Viewer
-    Gui, Fullscreen:Color, Black
+    ; Get the position of the main GUI window
+    Gui, Show  ; Make sure main GUI is active to get its position
+    WinGetPos, mainX, mainY, mainWidth, mainHeight, RPCL3 Icon Manager
 
-    ; Calculate image size and positioning for proper centering
-    ; Use 90% of screen width to leave some margin
-    imgWidth := Floor(MonWidth * 0.9)
-    imgHeight := Floor(MonHeight * 0.9)
+    ; Calculate position for Pic1 window (to the right of main window)
+    pic1X := mainX + mainWidth + 10  ; 10 pixels gap
+    pic1Y := mainY                   ; Same vertical position as main window
 
-    ; Center the image on the screen
-    centerX := Floor((MonWidth - imgWidth) / 2)
-    centerY := Floor((MonHeight - imgHeight) / 2)
+    ; Create new window to show Pic1
+    Gui, Pic1:New, +Owner1 +AlwaysOnTop, %CurrentGameTitle% - Pic1
+    Gui, Pic1:Font, s10, Segoe UI
 
-    ; Add picture with proper centering
-    Gui, Fullscreen:Add, Picture, x%centerX% y%centerY% w%imgWidth% h%imgHeight% vFullscreenImage, %CurrentPic1FullPath%
+    ; Get image dimensions for proper sizing
+    FileGetSize, pic1Size, %CurrentPic1FullPath%
 
-    ; Add instructions with monitor switching info
-    instructions := "Press ESC to close | Press M to switch to next monitor (" . CurrentFullscreenMonitor . "/" . MonitorCount . ")"
-    Gui, Fullscreen:Add, Text, x20 y20 w600 h30 cWhite BackgroundTrans, %instructions%
+    ; Add picture control - let it auto-size initially
+    Gui, Pic1:Add, Picture, x10 y10 w600 h400 vPic1Image gShowPic1Fullscreen, %CurrentPic1FullPath%
 
-    ; Show on current monitor
-    Gui, Fullscreen:Show, x%MonitorLeft% y%MonitorTop% w%MonWidth% h%MonHeight%
+    ; Add info text
+    infoText := "Game: " . CurrentGameTitle . " (" . CurrentGameId . ")"
+    infoText .= "`nPic1 Path: " . CurrentPic1FullPath
+    infoText .= "`nFile Size: " . pic1Size . " bytes"
+    infoText .= "`n`nClick image to view fullscreen (ESC to close fullscreen)"
+    Gui, Pic1:Add, Text, x10 y420 w600 h90 vPic1Info, %infoText%
 
-    ; Set up hotkeys
-    Hotkey, Escape, CloseFullscreen, On
-    Hotkey, m, SwitchMonitor, On
+    ; Show the window positioned to the right of main GUI
+    Gui, Pic1:Show, x%pic1X% y%pic1Y% w620 h500
 return
+If the window title doesn't match exactly, you can also use this alternative approach that gets the main window position differently:
 
+ShowPic1:
+    ; Function called when icon is clicked
+    if (CurrentGameId = "") {
+        MsgBox, 48, No Game Selected, Please select a game first.
+        return
+    }
 
+    if (CurrentPic1FullPath = "") {
+        MsgBox, 48, No Pic1 Path, No Pic1 path found in database for this game.
+        return
+    }
 
-If you want the image to fill more of the screen while maintaining aspect ratio, try this alternative:
+    if !FileExist(CurrentPic1FullPath) {
+        MsgBox, 48, File Not Found, Pic1 file not found:`n%CurrentPic1FullPath%
+        return
+    }
 
-ShowPic1Fullscreen:
-    ; Store the current monitor number globally
-    if (!CurrentFullscreenMonitor)
-        CurrentFullscreenMonitor := 1
+    ; Get the position of the main GUI window using the GUI handle
+    Gui, +LastFound
+    WinGetPos, mainX, mainY, mainWidth, mainHeight
 
-    ; Get monitor info
-    SysGet, MonitorCount, MonitorCount
-    SysGet, Monitor, Monitor, %CurrentFullscreenMonitor%
+    ; Calculate position for Pic1 window (to the right of main window)
+    pic1X := mainX + mainWidth + 10  ; 10 pixels gap
+    pic1Y := mainY                   ; Same vertical position as main window
 
-    ; Calculate dimensions
-    MonWidth := MonitorRight - MonitorLeft
-    MonHeight := MonitorBottom - MonitorTop
+    ; Make sure the window doesn't go off-screen
+    SysGet, ScreenWidth, 78
+    if (pic1X + 620 > ScreenWidth) {
+        ; If it would go off-screen, position it to the left instead
+        pic1X := mainX - 630  ; 620 width + 10 gap
+        if (pic1X < 0) {
+            ; If left doesn't work either, center it on screen
+            pic1X := Floor((ScreenWidth - 620) / 2)
+        }
+    }
 
-    ; Create fullscreen window
-    Gui, Fullscreen:New, -Caption -Border +AlwaysOnTop, Fullscreen Viewer
-    Gui, Fullscreen:Color, Black
+    ; Create new window to show Pic1
+    Gui, Pic1:New, +Owner1, %CurrentGameTitle% - Pic1
+    Gui, Pic1:Font, s10, Segoe UI
 
-    ; For better aspect ratio handling, specify only width OR height
-    ; Let AutoHotkey scale the other dimension automatically
+    ; Get image dimensions for proper sizing
+    FileGetSize, pic1Size, %CurrentPic1FullPath%
 
-    ; Use 85% of screen width, let height auto-scale
-    imgWidth := Floor(MonWidth * 0.85)
+    ; Add picture control - let it auto-size initially
+    Gui, Pic1:Add, Picture, x10 y10 w600 h400 vPic1Image gShowPic1Fullscreen, %CurrentPic1FullPath%
 
-    ; Center horizontally, and add some top margin
-    centerX := Floor((MonWidth - imgWidth) / 2)
-    topMargin := Floor(MonHeight * 0.05)  ; 5% from top
+    ; Add info text
+    infoText := "Game: " . CurrentGameTitle . " (" . CurrentGameId . ")"
+    infoText .= "`nPic1 Path: " . CurrentPic1FullPath
+    infoText .= "`nFile Size: " . pic1Size . " bytes"
+    infoText .= "`n`nClick image to view fullscreen (ESC to close fullscreen)"
+    Gui, Pic1:Add, Text, x10 y420 w600 h90 vPic1Info, %infoText%
 
-    ; Add picture - only specify width to maintain aspect ratio
-    Gui, Fullscreen:Add, Picture, x%centerX% y%topMargin% w%imgWidth% vFullscreenImage, %CurrentPic1FullPath%
-
-    ; Add instructions with monitor switching info
-    instructions := "Press ESC to close | Press M to switch to next monitor (" . CurrentFullscreenMonitor . "/" . MonitorCount . ")"
-    Gui, Fullscreen:Add, Text, x20 y20 w600 h30 cWhite BackgroundTrans, %instructions%
-
-    ; Show on current monitor
-    Gui, Fullscreen:Show, x%MonitorLeft% y%MonitorTop% w%MonWidth% h%MonHeight%
-
-    ; Set up hotkeys
-    Hotkey, Escape, CloseFullscreen, On
-    Hotkey, m, SwitchMonitor, On
+    ; Show the window positioned to the right of main GUI
+    Gui, Pic1:Show, x%pic1X% y%pic1Y% w620 h500
 return
 The key changes:
 
-Option 1: Properly centers the image both horizontally and vertically
-Option 2: Centers horizontally and positions with a small top margin, only specifies width to let AutoHotkey maintain the aspect ratio
+Get main window position: Uses WinGetPos to get the main GUI's position and size
+Calculate new position: Places the Pic1 window to the right with a 10-pixel gap
+Screen boundary check: Makes sure the window doesn't go off-screen (second version)
+Owner relationship: +Owner1 makes the Pic1 window owned by the main GUI
+Proper positioning: Uses x%pic1X% y%pic1Y% in the Show command
+This will make the Pic1 window appear to the right of your main window instead of behind it!
