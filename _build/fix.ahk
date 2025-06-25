@@ -66,7 +66,7 @@ GameSelected:
         CurrentPic1FullPath := ""
     }
 
-    ; Build the full path to Snd0 file (same logic)
+    ; Build the full path to Snd0 file with special PSN handling
     if (CurrentSnd0Path != "") {
         CurrentSnd0Path := LTrim(CurrentSnd0Path, "\/")
 
@@ -79,10 +79,32 @@ GameSelected:
             CurrentSnd0FullPath := A_ScriptDir . "\games\" . CurrentSnd0Path
         }
     } else {
-        CurrentSnd0FullPath := ""
+        ; No Snd0 path in database, try PSN default location
+        ; For PSN games, check if SND0.AT3 exists in dev_hdd0\game\<GAME_ID>\SND0.AT3
+        psnSoundPath := A_ScriptDir . "\dev_hdd0\game\" . CurrentGameId . "\SND0.AT3"
+        if FileExist(psnSoundPath) {
+            CurrentSnd0FullPath := psnSoundPath
+        } else {
+            CurrentSnd0FullPath := ""
+        }
     }
 
-    ; Rest of the GameSelected function remains the same...
+    ; If we still don't have a sound file, try additional PSN locations
+    if (CurrentSnd0FullPath = "" || !FileExist(CurrentSnd0FullPath)) {
+        ; Try alternative PSN sound file locations
+        psnLocations := [
+            A_ScriptDir . "\dev_hdd0\game\" . CurrentGameId . "\SND0.AT3",
+            A_ScriptDir . "\dev_hdd0\game\" . CurrentGameId . "\USRDIR\SND0.AT3",
+        ]
+
+        ; Check each possible location
+        for index, testPath in psnLocations {
+            if FileExist(testPath) {
+                CurrentSnd0FullPath := testPath
+                break
+            }
+        }
+    }
 
     ; Check for icon in rpcl3_icons folder - explicit path building
     IconInFolder := A_ScriptDir . "\rpcl3_icons\" . CurrentGameId . ".PNG"
@@ -109,7 +131,7 @@ GameSelected:
             GuiControl,, CurrentIcon,
             if (CurrentIconPath != "") {
                 statusText := "Original not found: " . CurrentIconPath
-                GuiControl,, IconStatus, %statusText%
+                GuiControl,, StatusText, %statusText%
             } else {
                 GuiControl,, IconStatus, No icon path in database
             }
@@ -119,7 +141,14 @@ GameSelected:
     ; Check and handle sound file with automatic conversion
     if (CurrentSnd0FullPath != "" && FileExist(CurrentSnd0FullPath)) {
         FileGetSize, soundSize, %CurrentSnd0FullPath%
-        GuiControl,, SoundFileInfo, Found (%soundSize% bytes)
+
+        ; Show where the sound file was found
+        SplitPath, CurrentSnd0FullPath, soundFileName, soundDir
+        if (InStr(CurrentSnd0FullPath, "dev_hdd0")) {
+            GuiControl,, SoundFileInfo, Found PSN (%soundSize% bytes)
+        } else {
+            GuiControl,, SoundFileInfo, Found (%soundSize% bytes)
+        }
 
         ; Auto-play the sound using the new conversion system
         if (PlaySoundFile(CurrentSnd0FullPath)) {
@@ -132,8 +161,8 @@ GameSelected:
         GuiControl,, SoundFileInfo, File not found
         GuiControl,, SoundStatus, Sound file not found: %CurrentSnd0FullPath%
     } else {
-        GuiControl,, SoundFileInfo, No path in database
-        GuiControl,, SoundStatus, No sound file path in database
+        GuiControl,, SoundFileInfo, No sound file found
+        GuiControl,, SoundStatus, No sound file found (checked PSN locations)
     }
 
     GuiControl,, StatusText, Game selected: %CurrentGameTitle%
