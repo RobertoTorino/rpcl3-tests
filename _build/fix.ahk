@@ -1,166 +1,93 @@
-GameSelected:
-    Gui, Submit, NoHide
+The issue is that the image is positioned at x=0 but has a calculated width that doesn't account for proper centering.
+Let me fix the fullscreen image positioning:
 
-    if (GameSelect = "Select a game..." || GameSelect = "") {
-        return
-    }
+ShowPic1Fullscreen:
+    ; Store the current monitor number globally
+    if (!CurrentFullscreenMonitor)
+        CurrentFullscreenMonitor := 1
 
-    ; Stop any currently playing sound
-    SoundPlay, *-1
+    ; Get monitor info
+    SysGet, MonitorCount, MonitorCount
+    SysGet, Monitor, Monitor, %CurrentFullscreenMonitor%
 
-    ; Extract Game ID from selection (format: "GAMEID - Title")
-    StringSplit, parts, GameSelect, %A_Space%-%A_Space%
-    selectedGameId := parts1
+    ; Calculate dimensions
+    MonWidth := MonitorRight - MonitorLeft
+    MonHeight := MonitorBottom - MonitorTop
 
-    ; Get detailed game info - now including Pic1 and Snd0
-    StringReplace, escapedGameId, selectedGameId, ', '', All
-    sql := "SELECT GameId, GameTitle, Icon0, Pic1, Snd0 FROM games WHERE GameId = '" . escapedGameId . "'"
+    ; Create fullscreen window
+    Gui, Fullscreen:New, -Caption -Border +AlwaysOnTop, Fullscreen Viewer
+    Gui, Fullscreen:Color, Black
 
-    if !db.GetTable(sql, result) {
-        MsgBox, 16, Query Error, Failed to get game details
-        return
-    }
+    ; Calculate image size and positioning for proper centering
+    ; Use 90% of screen width to leave some margin
+    imgWidth := Floor(MonWidth * 0.9)
+    imgHeight := Floor(MonHeight * 0.9)
 
-    if (result.RowCount = 0) {
-        MsgBox, 16, Error, Game not found
-        return
-    }
+    ; Center the image on the screen
+    centerX := Floor((MonWidth - imgWidth) / 2)
+    centerY := Floor((MonHeight - imgHeight) / 2)
 
-    result.GetRow(1, row)
-    CurrentGameId := row[1]
-    CurrentGameTitle := row[2]
-    CurrentIcon0Path := row[3]
-    CurrentPic1Path := row[4]
-    CurrentSnd0Path := row[5]  ; Store Snd0 path
+    ; Add picture with proper centering
+    Gui, Fullscreen:Add, Picture, x%centerX% y%centerY% w%imgWidth% h%imgHeight% vFullscreenImage, %CurrentPic1FullPath%
 
-    ; Build the full path to the original icon file
-    ; Handle different path structures for disc games vs PSN games
-    if (CurrentIcon0Path != "") {
-        CurrentIcon0Path := LTrim(CurrentIcon0Path, "\/")
+    ; Add instructions with monitor switching info
+    instructions := "Press ESC to close | Press M to switch to next monitor (" . CurrentFullscreenMonitor . "/" . MonitorCount . ")"
+    Gui, Fullscreen:Add, Text, x20 y20 w600 h30 cWhite BackgroundTrans, %instructions%
 
-        ; Check if path starts with known PSN or disc game prefixes
-        if (SubStr(CurrentIcon0Path, 1, 8) = "dev_hdd0" || SubStr(CurrentIcon0Path, 1, 5) = "games") {
-            ; Path already includes the proper prefix, use as-is
-            CurrentIconPath := A_ScriptDir . "\" . CurrentIcon0Path
-        } else {
-            ; Legacy path without prefix, assume it's a disc game
-            CurrentIconPath := A_ScriptDir . "\games\" . CurrentIcon0Path
-        }
-    } else {
-        CurrentIconPath := ""
-    }
+    ; Show on current monitor
+    Gui, Fullscreen:Show, x%MonitorLeft% y%MonitorTop% w%MonWidth% h%MonHeight%
 
-    ; Build the full path to Pic1 file (same logic)
-    if (CurrentPic1Path != "") {
-        CurrentPic1Path := LTrim(CurrentPic1Path, "\/")
-
-        ; Check if path starts with known PSN or disc game prefixes
-        if (SubStr(CurrentPic1Path, 1, 8) = "dev_hdd0" || SubStr(CurrentPic1Path, 1, 5) = "games") {
-            ; Path already includes the proper prefix, use as-is
-            CurrentPic1FullPath := A_ScriptDir . "\" . CurrentPic1Path
-        } else {
-            ; Legacy path without prefix, assume it's a disc game
-            CurrentPic1FullPath := A_ScriptDir . "\games\" . CurrentPic1Path
-        }
-    } else {
-        CurrentPic1FullPath := ""
-    }
-
-    ; Build the full path to Snd0 file with special PSN handling
-    if (CurrentSnd0Path != "") {
-        CurrentSnd0Path := LTrim(CurrentSnd0Path, "\/")
-
-        ; Check if path starts with known PSN or disc game prefixes
-        if (SubStr(CurrentSnd0Path, 1, 8) = "dev_hdd0" || SubStr(CurrentSnd0Path, 1, 5) = "games") {
-            ; Path already includes the proper prefix, use as-is
-            CurrentSnd0FullPath := A_ScriptDir . "\" . CurrentSnd0Path
-        } else {
-            ; Legacy path without prefix, assume it's a disc game
-            CurrentSnd0FullPath := A_ScriptDir . "\games\" . CurrentSnd0Path
-        }
-    } else {
-        ; No Snd0 path in database, try PSN default location
-        ; For PSN games, check if SND0.AT3 exists in dev_hdd0\game\<GAME_ID>\SND0.AT3
-        psnSoundPath := A_ScriptDir . "\dev_hdd0\game\" . CurrentGameId . "\SND0.AT3"
-        if FileExist(psnSoundPath) {
-            CurrentSnd0FullPath := psnSoundPath
-        } else {
-            CurrentSnd0FullPath := ""
-        }
-    }
-
-    ; If we still don't have a sound file, try additional PSN locations
-    if (CurrentSnd0FullPath = "" || !FileExist(CurrentSnd0FullPath)) {
-        ; Try alternative PSN sound file locations one by one
-        psnLocation1 := A_ScriptDir . "\dev_hdd0\game\" . CurrentGameId . "\SND0.AT3"
-        psnLocation2 := A_ScriptDir . "\dev_hdd0\game\" . CurrentGameId . "\USRDIR\SND0.AT3"
-
-        ; Check first location
-        if FileExist(psnLocation1) {
-            CurrentSnd0FullPath := psnLocation1
-        } else if FileExist(psnLocation2) {
-            ; Check second location
-            CurrentSnd0FullPath := psnLocation2
-        }
-    }
-
-    ; Check for icon in rpcl3_icons folder - explicit path building
-    IconInFolder := A_ScriptDir . "\rpcl3_icons\" . CurrentGameId . ".PNG"
-
-    ; Update GUI
-    GuiControl,, SelectedGame, %CurrentGameId% - %CurrentGameTitle%
-    GuiControl,, CurrentIconPath, %CurrentIconPath%
-
-    ; Check if icon exists in rpcl3_icons folder
-    if FileExist(IconInFolder) {
-        FileGetSize, iconSize, %IconInFolder%
-        GuiControl,, IconInFolder, Yes (%iconSize% bytes)
-        GuiControl,, CurrentIcon, %IconInFolder%
-        GuiControl,, IconStatus, From rpcl3_icons folder (click to view Pic1)
-    } else {
-        GuiControl,, IconInFolder, No
-
-        ; Try to show icon from original file path
-        if (CurrentIconPath != "" && FileExist(CurrentIconPath)) {
-            GuiControl,, CurrentIcon, %CurrentIconPath%
-            statusText := "From original location: " . CurrentIconPath
-            GuiControl,, IconStatus, %statusText% (click to view Pic1)
-        } else {
-            GuiControl,, CurrentIcon,
-            if (CurrentIconPath != "") {
-                statusText := "Original not found: " . CurrentIconPath
-                GuiControl,, IconStatus, %statusText%
-            } else {
-                GuiControl,, IconStatus, No icon path in database
-            }
-        }
-    }
-
-    ; Check and handle sound file with automatic conversion
-    if (CurrentSnd0FullPath != "" && FileExist(CurrentSnd0FullPath)) {
-        FileGetSize, soundSize, %CurrentSnd0FullPath%
-
-        ; Show where the sound file was found
-        if (InStr(CurrentSnd0FullPath, "dev_hdd0")) {
-            GuiControl,, SoundFileInfo, Found PSN (%soundSize% bytes)
-        } else {
-            GuiControl,, SoundFileInfo, Found (%soundSize% bytes)
-        }
-
-        ; Auto-play the sound using the new conversion system
-        if (PlaySoundFile(CurrentSnd0FullPath)) {
-            ; Sound played successfully
-        } else {
-            GuiControl,, SoundStatus, Failed to play sound file
-        }
-
-    } else if (CurrentSnd0FullPath != "") {
-        GuiControl,, SoundFileInfo, File not found
-        GuiControl,, SoundStatus, Sound file not found: %CurrentSnd0FullPath%
-    } else {
-        GuiControl,, SoundFileInfo, No sound file found
-        GuiControl,, SoundStatus, No sound file found (checked PSN locations)
-    }
-
-    GuiControl,, StatusText, Game selected: %CurrentGameTitle%
+    ; Set up hotkeys
+    Hotkey, Escape, CloseFullscreen, On
+    Hotkey, m, SwitchMonitor, On
 return
+
+
+
+If you want the image to fill more of the screen while maintaining aspect ratio, try this alternative:
+
+ShowPic1Fullscreen:
+    ; Store the current monitor number globally
+    if (!CurrentFullscreenMonitor)
+        CurrentFullscreenMonitor := 1
+
+    ; Get monitor info
+    SysGet, MonitorCount, MonitorCount
+    SysGet, Monitor, Monitor, %CurrentFullscreenMonitor%
+
+    ; Calculate dimensions
+    MonWidth := MonitorRight - MonitorLeft
+    MonHeight := MonitorBottom - MonitorTop
+
+    ; Create fullscreen window
+    Gui, Fullscreen:New, -Caption -Border +AlwaysOnTop, Fullscreen Viewer
+    Gui, Fullscreen:Color, Black
+
+    ; For better aspect ratio handling, specify only width OR height
+    ; Let AutoHotkey scale the other dimension automatically
+
+    ; Use 85% of screen width, let height auto-scale
+    imgWidth := Floor(MonWidth * 0.85)
+
+    ; Center horizontally, and add some top margin
+    centerX := Floor((MonWidth - imgWidth) / 2)
+    topMargin := Floor(MonHeight * 0.05)  ; 5% from top
+
+    ; Add picture - only specify width to maintain aspect ratio
+    Gui, Fullscreen:Add, Picture, x%centerX% y%topMargin% w%imgWidth% vFullscreenImage, %CurrentPic1FullPath%
+
+    ; Add instructions with monitor switching info
+    instructions := "Press ESC to close | Press M to switch to next monitor (" . CurrentFullscreenMonitor . "/" . MonitorCount . ")"
+    Gui, Fullscreen:Add, Text, x20 y20 w600 h30 cWhite BackgroundTrans, %instructions%
+
+    ; Show on current monitor
+    Gui, Fullscreen:Show, x%MonitorLeft% y%MonitorTop% w%MonWidth% h%MonHeight%
+
+    ; Set up hotkeys
+    Hotkey, Escape, CloseFullscreen, On
+    Hotkey, m, SwitchMonitor, On
+return
+The key changes:
+
+Option 1: Properly centers the image both horizontally and vertically
+Option 2: Centers horizontally and positions with a small top margin, only specifies width to let AutoHotkey maintain the aspect ratio
