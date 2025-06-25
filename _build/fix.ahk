@@ -149,7 +149,7 @@ GameSelected:
     }
 
     ; Stop any currently playing sound
-    SoundPlay
+    SoundPlay, *-1
 
     ; Extract Game ID from selection (format: "GAMEID - Title")
     StringSplit, parts, GameSelect, %A_Space%-%A_Space%
@@ -271,8 +271,8 @@ PlaySound:
 return
 
 StopSound:
-    ; Stop any playing sound
-    SoundPlay
+    ; Stop any playing sound (AHK v1 syntax)
+    SoundPlay, *-1
     GuiControl,, SoundStatus, Sound stopped
     GuiControl,, StatusText, Sound playback stopped
 return
@@ -543,6 +543,6 @@ return
 
 GuiClose:
     ; Stop any playing sound before closing
-    SoundPlay
+    SoundPlay, *-1
     db.CloseDB()
 ExitApp
