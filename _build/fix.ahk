@@ -4,7 +4,7 @@
 
 ; Global variables
 Global db
-Global CurrentGameId, CurrentGameTitle, CurrentIconPath, CurrentPic1FullPath, CurrentSnd0FullPath
+Global CurrentGameId, CurrentGameTitle, CurrentIconPath, CurrentPic1FullPath
 
 ; Icon Manager Script
 db := new SQLiteDB()
@@ -25,49 +25,45 @@ IconsFolder := A_ScriptDir . "\rpcl3_icons"
 FileCreateDir, %IconsFolder%
 
 ; Create Icon Manager GUI
+title := "RPCL3 Icon Manager - " . Chr(169) . " " . A_YYYY . " - Philip"
+Gui, Color, 24292F
+Gui, +AlwaysOnTop
+Gui, Font, s10 q5, Segoe UI Emoji
 Gui, Font, s10, Segoe UI
 
 ; Search/Select Game section
-Gui, Add, GroupBox, x10 y10 w480 h120, Select Game
-Gui, Add, Text, x20 y30, Search game:
+Gui, Add, GroupBox, x10 y10 w480 h120 cCCCCCC, Select Game
+Gui, Add, Text, x20 y30 cCCCCCC, Search game:
 Gui, Add, Edit, vSearchTerm x20 y50 w200 h20
-Gui, Add, Button, gSearchGames x230 y50 w60 h20, Search
-Gui, Add, ComboBox, vGameSelect x20 y75 w400 h200 gGameSelected, Select a game...
-Gui, Add, Text, vTotalGames x20 y105 w450 h20, Total games in database: Loading...
+Gui, Add, Button, gSearchGames x230 y50 w60 h20 cCCCCCC, Search
+Gui, Add, ComboBox, vGameSelect x20 y75 w400 h200 gGameSelected cCCCCCC, Select a game...
+Gui, Add, Text, vTotalGames x20 y105 w450 h20 cCCCCCC, Total games in database: Loading...
 
 ; Current Game Info section
-Gui, Add, GroupBox, x10 y140 w480 h140, Current Game Info
-Gui, Add, Text, x20 y160, Selected Game:
-Gui, Add, Text, vSelectedGame x20 y175 w450 h20, None selected
-Gui, Add, Text, x20 y195, Current Icon Path:
-Gui, Add, Text, vCurrentIconPath x20 y210 w450 h20, -
-Gui, Add, Text, x20 y215, Icon in rpcl3_icons:
-Gui, Add, Text, vIconInFolder x20 y230 w200 h20, Checking...
-Gui, Add, Text, x20 y245, Sound File (SND0):
-Gui, Add, Text, vSoundFileInfo x20 y260 w200 h20, Checking...
-
-; Sound Control section
-Gui, Add, GroupBox, x260 y140 w230 h140, Sound Control
-Gui, Add, Button, gPlaySound x270 y160 w100 h30, Play Sound
-Gui, Add, Button, gStopSound x380 y160 w100 h30, Stop Sound
-Gui, Add, Text, vSoundStatus x270 y200 w200 h60, No sound loaded
+Gui, Add, GroupBox, x10 y140 w480 h120 cCCCCCC, Current Game Info
+Gui, Add, Text, x20 y160 cCCCCCC, Selected Game:
+Gui, Add, Text, vSelectedGame x20 y175 w450 h20 cCCCCCC, None selected
+Gui, Add, Text, x20 y195 cCCCCCC, Current Icon Path:
+Gui, Add, Text, vCurrentIconPath x20 y210 w450 h20 cCCCCCC, -
+Gui, Add, Text, x20 y225 cCCCCCC, Icon in rpcl3_icons:
+Gui, Add, Text, vIconInFolder x20 y240 w200 h20 cCCCCCC, Checking...
 
 ; Icon Preview section
-Gui, Add, GroupBox, x10 y290 w240 h150, Current Icon Preview
-Gui, Add, Picture, vCurrentIcon x20 y310 w220 h100 gShowPic1,
-Gui, Add, Text, vIconStatus x20 y415 w200 h20, No icon loaded
+Gui, Add, GroupBox, x10 y270 w240 h150 cCCCCCC, Current Icon Preview
+Gui, Add, Picture, vCurrentIcon x20 y290 w220 h100 gShowPic1, ; Added gShowPic1 to make icon clickable
+Gui, Add, Text, vIconStatus x20 y395 w200 h20 cCCCCCC, No icon loaded
 
 ; Icon Actions section
-Gui, Add, GroupBox, x260 y290 w230 h150, Icon Actions
-Gui, Add, Button, gCopyExistingIcon x270 y310 w200 h30, Copy Existing Icon to Folder
-Gui, Add, Button, gBrowseAndCopyIcon x270 y350 w200 h30, Browse & Copy New Icon
-Gui, Add, Button, gDeleteIconFromFolder x270 y390 w200 h30, Delete Icon from Folder
+Gui, Add, GroupBox, x260 y270 w230 h150 cCCCCCC, Icon Actions
+Gui, Add, Button, gCopyExistingIcon x270 y290 w200 h30 cCCCCCC, Copy Existing Icon to Folder
+Gui, Add, Button, gBrowseAndCopyIcon x270 y330 w200 h30 cCCCCCC, Browse & Copy New Icon
+Gui, Add, Button, gDeleteIconFromFolder x270 y370 w200 h30 cCCCCCC, Delete Icon from Folder
 
 ; Progress section
-Gui, Add, GroupBox, x10 y450 w480 h80, Status
-Gui, Add, Text, vStatusText x20 y470 w450 h40, Ready. Select a game to manage its icon.
+Gui, Add, GroupBox, x10 y430 w480 h80 cCCCCCC, Status
+Gui, Add, Text, vStatusText x20 y450 w450 h40 cCCCCCC, Ready. Select a game to manage its icon.
 
-Gui, Show, w500 h540, Icon Manager
+Gui, Show, w500 h520, %title%
 
 ; Load total game count on startup
 LoadTotalGames()
@@ -87,6 +83,7 @@ LoadTotalGames() {
     if !db.GetTable(countSql, countResult) {
         errMsg := db.ErrorMsg
         GuiControl,, TotalGames, Total games: Query failed - %errMsg%
+        MsgBox, 16, Count Query Failed, Query failed: %errMsg%
         return
     }
 
@@ -148,16 +145,13 @@ GameSelected:
         return
     }
 
-    ; Stop any currently playing sound
-    SoundPlay, *-1
-
     ; Extract Game ID from selection (format: "GAMEID - Title")
     StringSplit, parts, GameSelect, %A_Space%-%A_Space%
     selectedGameId := parts1
 
-    ; Get detailed game info - now including Pic1 and Snd0
+    ; Get detailed game info - now including Pic1
     StringReplace, escapedGameId, selectedGameId, ', '', All
-    sql := "SELECT GameId, GameTitle, Icon0, Pic1, Snd0 FROM games WHERE GameId = '" . escapedGameId . "'"
+    sql := "SELECT GameId, GameTitle, Icon0, Pic1 FROM games WHERE GameId = '" . escapedGameId . "'"
 
     if !db.GetTable(sql, result) {
         MsgBox, 16, Query Error, Failed to get game details
@@ -173,8 +167,7 @@ GameSelected:
     CurrentGameId := row[1]
     CurrentGameTitle := row[2]
     CurrentIcon0Path := row[3]
-    CurrentPic1Path := row[4]
-    CurrentSnd0Path := row[5]  ; Store Snd0 path
+    CurrentPic1Path := row[4]  ; Store Pic1 path
 
     ; Build the full path to the original icon file
     if (CurrentIcon0Path != "") {
@@ -192,15 +185,7 @@ GameSelected:
         CurrentPic1FullPath := ""
     }
 
-    ; Build the full path to Snd0 file
-    if (CurrentSnd0Path != "") {
-        CurrentSnd0Path := LTrim(CurrentSnd0Path, "\/")
-        CurrentSnd0FullPath := A_ScriptDir . "\" . CurrentSnd0Path
-    } else {
-        CurrentSnd0FullPath := ""
-    }
-
-    ; Check for icon in rpcl3_icons folder
+    ; Check for icon in rpcl3_icons folder - explicit path building
     IconInFolder := A_ScriptDir . "\rpcl3_icons\" . CurrentGameId . ".PNG"
 
     ; Update GUI
@@ -232,130 +217,9 @@ GameSelected:
         }
     }
 
-    ; Check and handle sound file with automatic conversion
-    if (CurrentSnd0FullPath != "" && FileExist(CurrentSnd0FullPath)) {
-        FileGetSize, soundSize, %CurrentSnd0FullPath%
-        GuiControl,, SoundFileInfo, Found (%soundSize% bytes)
-
-        ; Auto-play the sound using the new conversion system
-        if (PlaySoundFile(CurrentSnd0FullPath)) {
-            ; Sound played successfully
-        } else {
-            GuiControl,, SoundStatus, Failed to play sound file
-        }
-
-    } else if (CurrentSnd0FullPath != "") {
-        GuiControl,, SoundFileInfo, File not found
-        GuiControl,, SoundStatus, Sound file not found: %CurrentSnd0FullPath%
-    } else {
-        GuiControl,, SoundFileInfo, No path in database
-        GuiControl,, SoundStatus, No sound file path in database
-    }
-
     GuiControl,, StatusText, Game selected: %CurrentGameTitle%
 return
 
-; Function to handle AT3 conversion and playback
-PlaySoundFile(soundPath) {
-    if (soundPath = "" || !FileExist(soundPath)) {
-        GuiControl,, SoundStatus, No sound file available
-        return false
-    }
-
-    ; Check if it's an AT3 file that needs conversion
-    SplitPath, soundPath, , dir, ext, name
-    StringLower, ext, ext  ; Convert to lowercase for comparison
-
-    if (ext = "at3") {
-        ; Convert AT3 to WAV
-        wavPath := dir . "\" . name . ".wav"
-
-        ; Check if WAV already exists and is newer than AT3
-        if FileExist(wavPath) {
-            FileGetTime, at3Time, %soundPath%
-            FileGetTime, wavTime, %wavPath%
-            if (wavTime >= at3Time) {
-                ; WAV is newer or same age, use it
-                SoundPlay, %wavPath%
-                GuiControl,, SoundStatus, Playing converted WAV: %name%.wav
-                return true
-            }
-        }
-
-        ; Need to convert AT3 to WAV
-        GuiControl,, SoundStatus, Converting AT3 to WAV...
-        if (ConvertAt3ToWav(soundPath, wavPath)) {
-            SoundPlay, %wavPath%
-            GuiControl,, SoundStatus, Playing converted WAV: %name%.wav
-            return true
-        } else {
-            GuiControl,, SoundStatus, Failed to convert AT3 file
-            return false
-        }
-    } else {
-        ; Not an AT3 file, try to play directly
-        SoundPlay, %soundPath%
-        GuiControl,, SoundStatus, Playing: %soundPath%
-        return true
-    }
-}
-
-; Function to convert AT3 to WAV
-ConvertAt3ToWav(at3Path, wavPath) {
-    exe := A_ScriptDir . "\tools\vgmstream-cli.exe"
-
-    ; Check if conversion tool exists
-    if (!FileExist(exe)) {
-        GuiControl,, StatusText, Error: vgmstream-cli.exe not found in tools folder
-        MsgBox, 48, Missing Tool, Missing vgmstream-cli.exe`n`nPlace the file in: %A_ScriptDir%\tools\vgmstream-cli.exe
-        return false
-    }
-
-    ; Build conversion command
-    cmd := """" . exe . """ """ . at3Path . """ -o """ . wavPath . """"
-
-    ; Show conversion status
-    GuiControl,, StatusText, Converting AT3 to WAV...
-
-    ; Run conversion (with timeout)
-    RunWait, %cmd%,, Hide UseErrorLevel
-
-    ; Check if conversion succeeded
-    if (ErrorLevel = 0 && FileExist(wavPath)) {
-        FileGetSize, wavSize, %wavPath%
-        GuiControl,, StatusText, AT3 conversion successful (%wavSize% bytes)
-        return true
-    } else {
-        GuiControl,, StatusText, AT3 conversion failed (Error: %ErrorLevel%)
-        return false
-    }
-}
-
-PlaySound:
-    if (CurrentSnd0FullPath = "") {
-        MsgBox, 48, No Sound File, No sound file available for the selected game.
-        return
-    }
-
-    if !FileExist(CurrentSnd0FullPath) {
-        MsgBox, 48, File Not Found, Sound file not found:`n%CurrentSnd0FullPath%
-        return
-    }
-
-    ; Use the new conversion system
-    if (PlaySoundFile(CurrentSnd0FullPath)) {
-        GuiControl,, StatusText, Playing sound file...
-    } else {
-        GuiControl,, StatusText, Failed to play sound file
-    }
-return
-
-StopSound:
-    ; Stop any playing sound (AHK v1 syntax)
-    SoundPlay, *-1
-    GuiControl,, SoundStatus, Sound stopped
-    GuiControl,, StatusText, Sound playback stopped
-return
 
 ShowPic1:
     ; Function called when icon is clicked
@@ -389,41 +253,25 @@ ShowPic1:
     infoText .= "`nPic1 Path: " . CurrentPic1FullPath
     infoText .= "`nFile Size: " . pic1Size . " bytes"
     infoText .= "`n`nClick image to view fullscreen (ESC to close fullscreen)"
-    Gui, Pic1:Add, Text, x10 y420 w600 h60 vPic1Info, %infoText%
+    Gui, Pic1:Add, Text, x10 y420 w600 h90 vPic1Info, %infoText%
 
     ; Show the window
-    Gui, Pic1:Show, w620 h490
+    Gui, Pic1:Show, w620 h500
 return
 
+
 ShowPic1Fullscreen:
-    ; Get monitor count
+    ; Store the current monitor number globally
+    if (!CurrentFullscreenMonitor)
+        CurrentFullscreenMonitor := 1
+
+    ; Get monitor info
     SysGet, MonitorCount, MonitorCount
+    SysGet, Monitor, Monitor, %CurrentFullscreenMonitor%
 
-    if (MonitorCount > 1) {
-        ; Multiple monitors - use cursor position to determine which monitor
-        MouseGetPos, mouseX, mouseY
-
-        ; Find which monitor the cursor is on
-        selectedMonitor := 1
-        Loop, %MonitorCount% {
-            SysGet, Mon, Monitor, %A_Index%
-            if (mouseX >= MonLeft && mouseX <= MonRight && mouseY >= MonTop && mouseY <= MonBottom) {
-                selectedMonitor := A_Index
-                break
-            }
-        }
-
-        ; Use the monitor where cursor is located
-        SysGet, Monitor, Monitor, %selectedMonitor%
-        MonWidth := MonitorRight - MonitorLeft
-        MonHeight := MonitorBottom - MonitorTop
-    } else {
-        ; Single monitor
-        SysGet, MonWidth, 78
-        SysGet, MonHeight, 79
-        MonitorLeft := 0
-        MonitorTop := 0
-    }
+    ; Calculate dimensions
+    MonWidth := MonitorRight - MonitorLeft
+    MonHeight := MonitorBottom - MonitorTop
 
     ; Create fullscreen window
     Gui, Fullscreen:New, -Caption -Border +AlwaysOnTop, Fullscreen Viewer
@@ -432,21 +280,38 @@ ShowPic1Fullscreen:
     ; Position image
     imgWidth := MonWidth - 100
 
-    ; Add picture with x=0, y=0 as you requested
+    ; Add picture
     Gui, Fullscreen:Add, Picture, x0 y0 w%imgWidth% vFullscreenImage, %CurrentPic1FullPath%
 
-    ; Add instructions
-    Gui, Fullscreen:Add, Text, x20 y20 w400 h30 cWhite BackgroundTrans, Press ESC to close fullscreen
+    ; Add instructions with monitor switching info
+    instructions := "Press ESC to close | Press M to switch to next monitor (" . CurrentFullscreenMonitor . "/" . MonitorCount . ")"
+    Gui, Fullscreen:Add, Text, x20 y20 w600 h30 cWhite BackgroundTrans, %instructions%
 
-    ; Show on selected monitor
+    ; Show on current monitor
     Gui, Fullscreen:Show, x%MonitorLeft% y%MonitorTop% w%MonWidth% h%MonHeight%
 
-    ; Set up ESC key hotkey to close fullscreen
+    ; Set up hotkeys
     Hotkey, Escape, CloseFullscreen, On
+    Hotkey, m, SwitchMonitor, On
+return
+
+SwitchMonitor:
+    ; Switch to next monitor
+    SysGet, MonitorCount, MonitorCount
+    CurrentFullscreenMonitor++
+    if (CurrentFullscreenMonitor > MonitorCount)
+        CurrentFullscreenMonitor := 1
+
+    ; Close current fullscreen and reopen on new monitor
+    Hotkey, Escape, CloseFullscreen, Off
+    Hotkey, m, SwitchMonitor, Off
+    Gui, Fullscreen:Destroy
+    Gosub, ShowPic1Fullscreen
 return
 
 CloseFullscreen:
     Hotkey, Escape, CloseFullscreen, Off
+    Hotkey, m, SwitchMonitor, Off
     Gui, Fullscreen:Destroy
 return
 
@@ -458,6 +323,7 @@ return
 Pic1GuiClose:
     Gui, Pic1:Destroy
 return
+
 
 CopyExistingIcon:
     if (CurrentGameId = "") {
@@ -478,6 +344,7 @@ CopyExistingIcon:
 
     CopyIconToFolder(CurrentIconPath, CurrentGameId, CurrentGameTitle)
 return
+
 
 BrowseAndCopyIcon:
     if (CurrentGameId = "") {
@@ -622,7 +489,5 @@ DeleteIconFromFolder:
 return
 
 GuiClose:
-    ; Stop any playing sound before closing
-    SoundPlay, *-1
     db.CloseDB()
 ExitApp
