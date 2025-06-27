@@ -45,6 +45,9 @@ ShowPic1:
     ; Show the window positioned to the right of main GUI
     Gui, Pic1:Show, x%pic1X% y%pic1Y% w620 h500
 return
+
+
+
 If the window title doesn't match exactly, you can also use this alternative approach that gets the main window position differently:
 
 ShowPic1:
