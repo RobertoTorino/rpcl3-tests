@@ -6,23 +6,23 @@ ScreenshotsFolder := ScriptDir . "\rpcl3_screenshots"
 CurrentImageIndex := 1
 ImageFiles := []
 
-; Get screen dimensions for maximized window
-SysGet, Mon1, Monitor, 1
-GuiWidth := Mon1Right - Mon1Left - 100
-GuiHeight := Mon1Bottom - Mon1Top - 100
+; Set initial GUI dimensions (normal window size)
+GuiWidth := 820
+GuiHeight := 660
 ImageWidth := GuiWidth - 20
-ImageHeight := GuiHeight - 80  ; Reserve space for buttons
+ImageHeight := 600  ; Fixed height as in original
 
-; Create the GUI - maximized
+; Create the GUI - normal size with MaximizeBox
+Gui, +Resize +MaximizeBox
 Gui, Add, Picture, x10 y10 w%ImageWidth% h%ImageHeight% vImageDisplay 0x100
-Gui, Add, Button, x10 y%GuiHeight%-60 w100 h30 gPrevImage, Previous
-Gui, Add, Button, x120 y%GuiHeight%-60 w100 h30 gNextImage, Next
-Gui, Add, Button, x230 y%GuiHeight%-60 w100 h30 gBrowseFolder, Browse Folder
-Gui, Add, Text, x340 y%GuiHeight%-55 w200 h20 vImageInfo
-Gui, Add, Text, x550 y%GuiHeight%-55 w300 h20 vFolderPath, Folder: %ScreenshotsFolder%
+Gui, Add, Button, x10 y620 w100 h30 gPrevImage, Previous
+Gui, Add, Button, x120 y620 w100 h30 gNextImage, Next
+Gui, Add, Button, x230 y620 w100 h30 gBrowseFolder, Browse Folder
+Gui, Add, Text, x340 y625 w200 h20 vImageInfo
+Gui, Add, Text, x550 y625 w300 h20 vFolderPath, Folder: %ScreenshotsFolder%
 
-; Show maximized GUI
-Gui, Show, w%GuiWidth% h%GuiHeight% Maximize, Image Viewer
+; Show GUI at normal size
+Gui, Show, w%GuiWidth% h%GuiHeight%, Image Viewer
 
 ; Load images from the initial folder
 GoSub, LoadImages
@@ -96,9 +96,11 @@ return
 UpdateImage:
 if (ImageFiles.Length() > 0) {
     CurrentImagePath := ImageFiles[CurrentImageIndex]
-    ; Use the picture control with proper scaling (0x100 = SS_CENTERIMAGE for centering/scaling)
-    GuiControl,, ImageDisplay, *w%ImageWidth% *h%ImageHeight% %CurrentImagePath%
-    GuiControl,, ImageInfo, Image %CurrentImageIndex% of %ImageFiles.Length()
+
+    ; Get current image control dimensions
+    GuiControlGet, ImagePos, Pos, ImageDisplay
+    GuiControl,, ImageDisplay, *w%ImagePosW% *h%ImagePosH% %CurrentImagePath%
+    GuiControl,, ImageInfo, Image %CurrentImageIndex% of %ImageFiles.Length%
 
     ; Extract just the filename for display
     SplitPath, CurrentImagePath, FileName
@@ -106,16 +108,16 @@ if (ImageFiles.Length() > 0) {
 }
 return
 
-; Handle window resize
+; Handle window resize (when maximized or manually resized)
 GuiSize:
 if A_EventInfo = 1  ; Minimized
     return
 
-; Recalculate dimensions
+; Recalculate dimensions based on new window size
 NewGuiWidth := A_GuiWidth
 NewGuiHeight := A_GuiHeight
 NewImageWidth := NewGuiWidth - 20
-NewImageHeight := NewGuiHeight - 80
+NewImageHeight := NewGuiHeight - 80  ; Reserve space for buttons
 
 ; Resize controls
 GuiControl, Move, ImageDisplay, w%NewImageWidth% h%NewImageHeight%
