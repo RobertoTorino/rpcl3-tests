@@ -1,406 +1,332 @@
-; YouTube: @game_play267
-; Twitch: RR_357000
-; X:@relliK_2048
-; Discord:
-; Music Player
 #Persistent
 #SingleInstance force
+#NoEnv
 SetBatchLines, -1
-SetTimer, UpdateTrackInfo, 500
 SetTitleMatchMode, 2
 
-ffmpeg :=  A_ScriptDir . "\tools\ffmpeg.exe"
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; INITIALIZATION
+; ═══════════════════════════════════════════════════════════════════════════════════════
 
-;RunWait, . ffmpeg -version,, Hide
-;if (ErrorLevel) {
-;    MsgBox, 48, Error, ffmpeg is not available or not in PATH.
-;    Log("ERROR", "FFMPEG check failed: FFMPEG is not in PATH or missing.")
-;}
-
-baseDir := A_ScriptDir . "\rpcl3_recordings"
-filePath := baseDir . "\" . filePath
-
-if (playlist.Length()) {
-    CurrentTrack := playlist[1]
-    CurrentTrackName := GetFileName(CurrentTrack)
-}
-global playlist         := []
-global currentIndex     := 1
-global audioDir         := A_ScriptDir . "\rpcl3_recordings"
-global playlistFile     := audioDir . "\rpcl3_playlist.m3u"
-sortCol                 := 1
-sortDir                 := "Asc"
-global TestTrack        := audioDir . "\rpcl3_test.mp3"
-playlist.Push(audioDir . "\rpcl3_test.mp3")
-CurrentTrack            := filePath
-CurrentTrackName        := GetFileName(filePath)
-MusicLogFile            := A_ScriptDir  . "\rpcl3_music_player.log"
-MusicIniFile            := A_ScriptDir  . "\rpcl3_music_player.ini"
+; Global variables
+global playlist := []
+global currentIndex := 1
+global audioDir := A_ScriptDir . "\rpcl3_recordings"
+global playlistFile := audioDir . "\rpcl3_playlist.m3u"
+global sortCol := 1
+global sortDir := "Asc"
+global TestTrack := audioDir . "\rpcl3_test.mp3"
+global CurrentTrack := ""
+global CurrentTrackName := ""
+global MusicLogFile := A_ScriptDir . "\rpcl3_music_player.log"
+global MusicIniFile := A_ScriptDir . "\rpcl3_music_player.ini"
 global LastMetaFile := ""
+global ffmpeg := A_ScriptDir . "\tools\ffmpeg.exe"
+global player := ""
+global MyGuiHwnd := ""
+global isPlaying := false
+global isPaused := false
 
-PlayCurrent()
+; Initialize application
+Init()
 
-title := "RPCL3 Music Player - " . Chr(169) . " " . A_YYYY . " - Philip"
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; MAIN FUNCTIONS
+; ═══════════════════════════════════════════════════════════════════════════════════════
 
-Gui, +Resize
-Gui, Font, s10 q5, Segoe UI
-Gui, Margin, 15, 15
-Gui, +HwndMyGuiHwnd
-Gui, +AlwaysOnTop
-Gui, +LastFound
-Gui, Add, ListView, vTrackList gTrackClicked x0 y0 w515 h227 AltSubmit Grid, Name|Size|Bitrate|Type
+Init() {
+    ; Check dependencies
+    CheckDependencies()
 
-Gui, ListView, TrackList             ; Set target ListView
-LV_InsertCol(5, 0, "Full Path")      ; Insert hidden column
-LV_ModifyCol(5, 0)                   ; Hide column (0 width)
+    ; Ensure directories exist
+    EnsureDirExists()
 
-Gui, Add, Text, gPlayPause                x0 y228 w100 h23 Border +Center +0x200, Play/Pause
-Gui, Add, Text, gStopTrack              x100 y228 w75 h23 Border +Center +0x200, Stop
-Gui, Add, Text, gNextTrack              x175 y228 w75 h23 Border +Center +0x200, Next
-Gui, Add, Text, gViewLogs               x315 y228 w100 h23 Border +Center +0x200, View Logs
-Gui, Add, Text, gClearLogs              x415 y228 w100 h23 Border +Center +0x200, Clear Logs
+    ; Load settings
+    LoadSettings()
 
-Gui, Add, ActiveX, x0 y250 w515 h180 vWMP, WMPlayer.OCX
-player := WMP
-WMP.uiMode := "full"
-WMP.Enabled := true
-WMP.settings.volume := 50
+    ; Create GUI
+    CreateGUI()
 
-Gui, Add, Text, vCurrentTrack x2 y432 w515 +Left +0x200, Now playing: (TestTrack)
+    ; Load playlist
+    LoadPlaylist()
 
-CurrentTrack := FileExist(CurrentTrack) ? CurrentTrack : TestTrack
-SplitPath, CurrentTrack, FileName
-GuiControl,, CurrentTrack, Now playing: %FileName%
+    ; Start timer for track info updates
+    SetTimer, UpdateTrackInfo, 500
 
-Gui, Show, w515 h482, %title%
+    ; Show GUI
+    title := "RPCL3 Music Player - " . Chr(169) . " " . A_YYYY . " - Philip"
+    Gui, Show, w515 h482, %title%
 
-Menu, Trackmenu, Add, Convert to MP3, OnConvertToMP3
-Menu, Trackmenu, Add, Show in Explorer, OnShowInExplorer
-Menu, Trackmenu, Add, Copy File Path, OnCopyPath
-Menu, Trackmenu, Add, Rename File, OnRenameFile
-Menu, Trackmenu, Add, Delete File, OnDeleteFile
-
-GuiControl, +0x100, TrackList
-GuiControl,, StatusBar, Converting to MP3...
-GuiControl,, StatusBar, Ready.
-
-player.settings.volume := 50
-GuiControl,, VolumeSlider, % player.settings.volume
-
-
-; ─── Bottom statusbar, 1 is reserved for process priority status, use 2. ──────────────────────────────────────────────
-Gui, Add, StatusBar, vStatusBar1 hWndhStatusBar
-SB_SetParts(495)
-UpdateStatusBar(msg, segment := 1) {
-    SB_SetText(msg, segment)
+    Log("INFO", "Music Player initialized successfully")
 }
 
- SB_SetText("Current path: " . filePath)
-
-; Load playlist
-EnsureDirExists()
-
-LoadPlaylist()
-global MusicIniFile
-currentIndex := 1
-
-if (A_GuiEvent = "DoubleClick")
-    LV_ModifyCol(A_EventInfo, "AutoHdr")
-
-    IniWrite, %sortCol%, %MusicIniFile%, Sort, Column
-    IniWrite, %sortDir%, %MusicIniFile%, Sort, Direction
-    Log("DEBUG", "Load playlist: SortCol=" . sortCol . ", written to: " . MusicIniFile)
-    Log("DEBUG", "Load playlist: SortDir=" . sortDir . ", written to: " . MusicIniFile)
-
-return
-
-
-OnShowInExplorer:
-    Gui, ListView, TrackList
-    row := LV_GetNext()
-    if (row) {
-        LV_GetText(filePath, row, 5)
-        Run, explorer.exe /select`, "%filePath%"
+CheckDependencies() {
+    ; Check if ffmpeg exists
+    if !FileExist(ffmpeg) {
+        MsgBox, 48, Warning, ffmpeg.exe not found in /tools folder.`nMP3 conversion will not be available.
+        Log("WARNING", "ffmpeg.exe not found: " . ffmpeg)
     }
-return
 
-
-OnCopyPath:
-    Gui, ListView, TrackList
-    row := LV_GetNext()
-    if (row) {
-        LV_GetText(filePath, row, 5)
-        Clipboard := filePath
-        TrayTip, Copied, File path copied to clipboard., 1
-    }
-return
-
-
-OnRenameFile:
-    Gui, ListView, TrackList
-    row := LV_GetNext()
-    if (row) {
-        LV_GetText(filePath, row, 5)
-        SplitPath, filePath, name, dir, ext, nameNoExt
-
-        ; Get position of main window
-        Gui +LastFound
-        mainID := WinExist()
-        WinGetPos, x, y, w, h, ahk_id %mainID%
-
-        ; Decide where to show InputBox (e.g., to the right)
-        inputX := x + w + 10     ; 10 pixels to the right of the main window
-        inputY := y + 100        ; a bit lower than top
-
-        ; Show InputBox at custom position
-        InputBox, newName, Rename File, Enter a new file name (without extension):, , 300, 130, %inputX%, %inputY%, , , %nameNoExt%
-
-        if ErrorLevel
-            return
-
-        newPath := dir . "\" . newName . "." . ext
-        FileMove, %filePath%, %newPath%
-        if !ErrorLevel {
-            LV_Modify(row, "Col1", newName . "." . ext)
-            LV_Modify(row, "Col5", newPath)
-            Log("INFO", "File renamed to: " . newPath)
-        } else {
-            MsgBox, 16, Error, Failed to rename file.
-            Log("ERROR", "Rename failed from " . filePath . " to " . newPath)
-        }
-    }
-return
-
-
-OnDeleteFile:
-    Gui, ListView, TrackList
-    row := LV_GetNext()
-    if (row) {
-        LV_GetText(filePath, row, 5)
-
-        ; Make sure file exists before asking
-        if !FileExist(filePath) {
-            MsgBox, 16, Error, File does not exist:`n%filePath%
-            return
-        }
-
-        ; Show prompt on top
-        Gui +OwnDialogs +AlwaysOnTop
-        MsgBox, 52, Confirm Delete, Are you sure you want to delete this file?`n%filePath%
-        Gui -AlwaysOnTop
-
-        IfMsgBox Yes
-        {
-            FileRecycle, %filePath%
-            LV_Delete(row)
-            Log("INFO", "File deleted to recycle bin: " . filePath)
-        }
+    ; Test if test track exists, if not create a placeholder
+    if !FileExist(TestTrack) {
+        ; Create a simple test file entry for demonstration
+        playlist.Push("No audio files found")
+        Log("INFO", "No test track found, placeholder created")
     } else {
-        MsgBox, 48, Info, Please select a file to delete.
+        playlist.Push(TestTrack)
+        CurrentTrack := TestTrack
+        CurrentTrackName := GetFileName(TestTrack)
     }
-return
-
-
-OnEditArtist:
-    MsgBox, Title editor not yet implemented.
-return
-
-
-OnEditTitle:
-    ; InputBox for title editing
-    MsgBox, Title editor not yet implemented.
-return
-
-
-OnPlay:
-    Gui, ListView, TrackList
-    row := LV_GetNext()
-    if (row) {
-        LV_GetText(filePath, row, 5)
-        PlayCurrent(filePath)
-    }
-return
-
-
-OnPlayNext:
-    MsgBox, On Play Next not yet implemented.
-return
-
-
-OnPlayAllFromHere:
-    MsgBox, On PlayAll From Here not yet implemented.
-return
-
-
-ToolsMenu:
-    MsgBox, Tools Menu not yet implemented.
-return
-
-
-ConvertMenu:
-    ; InputBox for title editing
-    MsgBox, Title editor not yet implemented.
-return
-
-
-MetadataMenu:
-    ; InputBox for title editing
-    MsgBox, Convert Menu not yet implemented.
-return
-
-
-EnsureDirExists() {
-    global audioDir
-    if !FileExist(audioDir)
-        FileCreateDir, %audioDir%
 }
 
+LoadSettings() {
+    ; Load sort preferences
+    IniRead, sortCol, %MusicIniFile%, Sort, Column, 1
+    IniRead, sortDir, %MusicIniFile%, Sort, Direction, Asc
+
+    ; Load other settings as needed
+    Log("DEBUG", "Settings loaded: SortCol=" . sortCol . ", SortDir=" . sortDir)
+}
+
+CreateGUI() {
+    Gui, +Resize +LastFound +HwndMyGuiHwnd
+    Gui, Font, s10 q5, Segoe UI
+    Gui, Margin, 15, 15
+
+    ; Main ListView
+    Gui, Add, ListView, vTrackList gTrackClicked x0 y0 w515 h227 AltSubmit Grid, Name|Size|Bitrate|Type|Duration
+    Gui, ListView, TrackList
+    LV_InsertCol(6, 0, "Full Path")  ; Hidden column for full path
+    LV_ModifyCol(6, 0)
+
+    ; Control buttons
+    Gui, Add, Text, gPlayPause x0 y228 w80 h23 Border +Center +0x200, ▶ Play
+    Gui, Add, Text, gStopTrack x80 y228 w60 h23 Border +Center +0x200, ⏹ Stop
+    Gui, Add, Text, gPrevTrack x140 y228 w60 h23 Border +Center +0x200, ⏮ Prev
+    Gui, Add, Text, gNextTrack x200 y228 w60 h23 Border +Center +0x200, ⏭ Next
+    Gui, Add, Text, gShuffle x260 y228 w60 h23 Border +Center +0x200, 🔀 Shuffle
+    Gui, Add, Text, gViewLogs x320 y228 w95 h23 Border +Center +0x200, 📋 Logs
+    Gui, Add, Text, gClearLogs x415 y228 w100 h23 Border +Center +0x200, 🗑 Clear
+
+    ; Volume control
+    Gui, Add, Text, x0 y252 w40 h20, Volume:
+    Gui, Add, Slider, vVolumeSlider gAdjustVolume x40 y252 w200 h20 Range0-100 TickInterval10, 50
+    Gui, Add, Text, vVolumeDisplay x245 y252 w30 h20, 50%
+
+    ; Progress bar
+    Gui, Add, Text, x0 y275 w40 h20, Progress:
+    Gui, Add, Slider, vSeekSlider gSeekTrack x40 y275 w475 h20 Range0-100, 0
+
+    ; Windows Media Player control
+    Gui, Add, ActiveX, x0 y300 w515 h120 vWMP, WMPlayer.OCX
+    player := WMP
+    WMP.uiMode := "none"  ; Hide default controls
+    WMP.Enabled := true
+    WMP.settings.volume := 50
+
+    ; Current track display
+    Gui, Add, Text, vCurrentTrack x2 y425 w511 h20 +Left +0x200, Now playing: (None)
+    Gui, Add, Text, vTimeDisplay x2 y445 w200 h20 +Left, 00:00 / 00:00
+    Gui, Add, Text, vShuffleStatus x300 y445 w100 h20 +Left,
+
+    ; Status bar
+    Gui, Add, StatusBar, vStatusBar
+    SB_SetText("Ready - " . playlist.Length() . " tracks loaded")
+
+    ; Context menu
+    CreateContextMenu()
+
+    Log("DEBUG", "GUI created successfully")
+}
+
+CreateContextMenu() {
+    Menu, TrackMenu, Add, ▶ Play Track, OnPlay
+    Menu, TrackMenu, Add
+    Menu, TrackMenu, Add, 🔄 Convert to MP3, OnConvertToMP3
+    Menu, TrackMenu, Add, 📁 Show in Explorer, OnShowInExplorer
+    Menu, TrackMenu, Add, 📋 Copy File Path, OnCopyPath
+    Menu, TrackMenu, Add
+    Menu, TrackMenu, Add, ✏ Rename File, OnRenameFile
+    Menu, TrackMenu, Add, 🗑 Delete File, OnDeleteFile
+    Menu, TrackMenu, Add
+    Menu, TrackMenu, Add, ℹ Track Info, OnTrackInfo
+}
+
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; PLAYLIST MANAGEMENT
+; ═══════════════════════════════════════════════════════════════════════════════════════
 
 LoadPlaylist() {
-    global playlist, audioDir
     playlist := []
 
+    ; Load audio files from directory
     Loop, Files, %audioDir%\*.*, R
     {
         SplitPath, A_LoopFileFullPath,,, ext
         StringLower, ext, ext
-        if (ext = "mp3" || ext = "wav")
+        if (ext = "mp3" || ext = "wav" || ext = "flac" || ext = "m4a" || ext = "wma")
             playlist.Push(A_LoopFileFullPath)
     }
 
+    ; Sort playlist
+    SortPlaylist()
+
+    ; Refresh display
     RefreshListView()
+
+    ; Update status
+    SB_SetText("Loaded " . playlist.Length() . " audio files")
+    Log("INFO", "Playlist loaded: " . playlist.Length() . " files")
 }
 
-
-SavePlaylist() {
-    global playlist, playlistFile
-    FileDelete, %playlistFile%
-    for each, track in playlist
-    Log("DEBUG", "Save Playlist track: " . track . playlistFile)
+SortPlaylist() {
+    ; Simple alphabetical sort by filename
+    ; You can enhance this to sort by different criteria
+    if (playlist.Length() > 1) {
+        ; Bubble sort for simplicity
+        Loop, % playlist.Length() - 1 {
+            outerLoop := A_Index
+            Loop, % playlist.Length() - outerLoop {
+                innerLoop := A_Index
+                SplitPath, % playlist[innerLoop], name1
+                SplitPath, % playlist[innerLoop + 1], name2
+                if (name1 > name2) {
+                    temp := playlist[innerLoop]
+                    playlist[innerLoop] := playlist[innerLoop + 1]
+                    playlist[innerLoop + 1] := temp
+                }
+            }
+        }
+    }
 }
-
 
 RefreshListView() {
-    global playlist
     Gui, ListView, TrackList
-    LV_Delete()  ; Clear all existing rows
+    LV_Delete()
+
+    if (playlist.Length() = 0) {
+        LV_Add("", "No audio files found", "", "", "", "")
+        return
+    }
 
     for index, path in playlist {
-        SplitPath, path, name, dir, ext
-        FileGetSize, sizeBytes, %path%
-        sizeMB := Round(sizeBytes / 1048576, 2) . " MB"
-        bitrate := GetBitrate(path)
-        row := LV_Add("", name, sizeMB, bitrate, ext)
-        LV_Modify(row, "Col5", path) ; Set hidden column with full path
+        if FileExist(path) {
+            SplitPath, path, name, dir, ext
+            FileGetSize, sizeBytes, %path%
+            sizeMB := Round(sizeBytes / 1048576, 2) . " MB"
+            bitrate := GetBitrate(path)
+            duration := GetDuration(path)
+
+            row := LV_Add("", name, sizeMB, bitrate, ext, duration)
+            LV_Modify(row, "Col6", path)  ; Hidden column with full path
+        }
     }
 
-    LV_ModifyCol() ; Auto-size visible columns
+    ; Auto-size columns
+    LV_ModifyCol()
 
-        ; <-- Add your highlight code here:
-        Loop, % LV_GetCount()
-            LV_Modify(A_Index, "")  ; Reset all rows to normal
-
-        LV_Modify(currentIndex, "cBlue") ; Highlight current row text color blue
-        ; Or LV_Modify(currentIndex, "bYellow") to highlight background
+    ; Highlight current track
+    HighlightCurrentTrack()
 }
 
+HighlightCurrentTrack() {
+    ; Reset all rows
+    Loop, % LV_GetCount()
+        LV_Modify(A_Index, "")
 
-GuiContextMenu:
-    if (A_GuiControl = "TrackList") {
-        Menu, TrackMenu, Show
-    }
-return
-
-
-GetBitrate(file) {
-    try {
-        media := player.newMedia(file)
-        return media.getItemInfo("Bitrate") . " kbps"
-        Log("INFO", "Get bitrate, bitrate: " media.getItemInfo("Bitrate") . " kbps")
-    } catch e {
-        return "?"
-        Log("WARNING", "Get bitrate, no bitrate info available.")
-    }
+    ; Highlight current track
+    if (currentIndex > 0 && currentIndex <= LV_GetCount())
+        LV_Modify(currentIndex, "cBlue")
 }
 
-
-PlaySelected:
-    Gui, ListView, TrackList
-    row := LV_GetNext()
-    if (row) {
-        LV_GetText(filePath, row, 5) ; Get full path from hidden column
-        Log("DEBUG", "Play selected, file path from LV_GetText: " . filePath)
-        MsgBox, 64, Debug, filePath = %filePath%
-        Log("DEBUG", "Play selected, file path = " . filePath)
-        currentIndex := row
-        PlayCurrent(filePath)
-        Log("DEBUG", "Trying to play: " . filePath)
-    }
-return
-
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; PLAYBACK CONTROL
+; ═══════════════════════════════════════════════════════════════════════════════════════
 
 PlayCurrent(filePath := "") {
-    global player, playlist, currentIndex, CurrentTrack
+    global
 
-    if (filePath != "") {
-        if !FileExist(filePath) {
-            MsgBox, 16, Error, File not found:`n%filePath%
-            Log("ERROR", "Play current, file not found: " . filePath)
-            return
-        }
-        CurrentTrack := GetFileName(filePath)
-    } else {
-        if !(IsObject(playlist) && playlist.Length() >= currentIndex && currentIndex >= 1) {
-            MsgBox, 16, Error, Playlist is empty or current index is invalid.
-            Log("ERROR", "Play current, playlist is empty or current index is invalid.")
+    if (filePath = "") {
+        if (currentIndex < 1 || currentIndex > playlist.Length()) {
+            Log("ERROR", "Invalid currentIndex: " . currentIndex)
             return
         }
         filePath := playlist[currentIndex]
-        CurrentTrack := GetFileName(filePath)
     }
 
-    ; Dynamically update GUI track label
+    if !FileExist(filePath) {
+        MsgBox, 16, Error, File not found:`n%filePath%
+        Log("ERROR", "File not found: " . filePath)
+        return
+    }
+
+    ; Update current track info
+    CurrentTrack := GetFileName(filePath)
     GuiControl,, CurrentTrack, Now Playing: %CurrentTrack%
 
-
-   ; Update ListView highlight:
-   Loop, % LV_GetCount()
-   LV_Modify(A_Index, "")  ; reset all rows
-   LV_Modify(currentIndex, "cBlue") ; highlight current
-
+    ; Update player
     player.URL := filePath
     player.controls.play()
-    Sleep, 500
+
+    isPlaying := true
+    isPaused := false
+
+    ; Update button text
+    GuiControl,, PlayPause, ⏸ Pause
+
+    ; Highlight in list
+    HighlightCurrentTrack()
+
+    ; Update status
+    SB_SetText("Playing: " . CurrentTrack)
+
+    Log("INFO", "Playing: " . filePath)
 }
-
-
-; Helper function to extract filename from path
-GetFileName(path) {
-    SplitPath, path,,, ext, name_no_ext
-    return name_no_ext . "." . ext
-    Log("DEBUG", "Get file name, trying to play: " . track . filePath)
-}
-
 
 PlayPause() {
-    global player
-    if (player.playState = 2)
-        player.controls.play()
-    else if (player.playState = 3)
-        player.controls.pause()
-    else
-        PlayCurrent()
-}
+    global
 
+    if (player.playState = 3) {  ; Playing
+        player.controls.pause()
+        isPaused := true
+        isPlaying := false
+        GuiControl,, PlayPause, ▶ Play
+        SB_SetText("Paused: " . CurrentTrack)
+        Log("INFO", "Playback paused")
+    } else {  ; Paused or stopped
+        if (isPaused) {
+            player.controls.play()
+        } else {
+            PlayCurrent()
+        }
+        isPaused := false
+        isPlaying := true
+        GuiControl,, PlayPause, ⏸ Pause
+        SB_SetText("Playing: " . CurrentTrack)
+        Log("INFO", "Playback resumed/started")
+    }
+}
 
 StopTrack() {
-    global player
+    global
+
     player.controls.stop()
+    isPlaying := false
+    isPaused := false
+
+    GuiControl,, PlayPause, ▶ Play
+    GuiControl,, CurrentTrack, Stopped
+    GuiControl,, TimeDisplay, 00:00 / 00:00
+    GuiControl,, SeekSlider, 0
+
+    SB_SetText("Stopped")
+    Log("INFO", "Playback stopped")
 }
 
-
 NextTrack() {
-    global currentIndex, playlist, MyGuiHwnd
+    global
+
+    if (playlist.Length() = 0) return
 
     currentIndex++
     if (currentIndex > playlist.Length())
@@ -408,123 +334,111 @@ NextTrack() {
 
     PlayCurrent()
 
+    ; Update ListView selection
     Gui, ListView, TrackList
-
-    ; Clear all previous selections
-    Loop, % LV_GetCount() {
+    Loop, % LV_GetCount()
         LV_Modify(A_Index, "-Select")
-    }
-
-    ; Select and focus the current track only
     LV_Modify(currentIndex, "Select Focus")
-
-    ; Set focus to ListView so selection stays blue
-    ControlFocus, SysListView321, ahk_id %MyGuiHwnd%
 }
 
+PrevTrack() {
+    global
 
-; ─── View logs function. ────────────────────────────────────────────────────────────────────
-ViewLogs:
-global MusicLogFile
-    Run, notepad.exe "%A_ScriptDir%\rpcl3_music_player.log"
-    Log("DEBUG", "Opened " . MusicLogFile . " in Notepad.")
-    SB_SetText(MusicLogFile . " opened.", 2)
+    if (playlist.Length() = 0) return
+
+    currentIndex--
+    if (currentIndex < 1)
+        currentIndex := playlist.Length()
+
+    PlayCurrent()
+
+    ; Update ListView selection
+    Gui, ListView, TrackList
+    Loop, % LV_GetCount()
+        LV_Modify(A_Index, "-Select")
+    LV_Modify(currentIndex, "Select Focus")
+}
+
+Shuffle() {
+    global
+
+    if (playlist.Length() <= 1) return
+
+    ; Simple shuffle - pick random track
+    Random, newIndex, 1, % playlist.Length()
+    currentIndex := newIndex
+    PlayCurrent()
+
+    GuiControl,, ShuffleStatus, 🔀 Shuffled
+    SetTimer, ClearShuffleStatus, 2000
+}
+
+ClearShuffleStatus:
+    GuiControl,, ShuffleStatus,
+    SetTimer, ClearShuffleStatus, Off
 return
 
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; UTILITY FUNCTIONS
+; ═══════════════════════════════════════════════════════════════════════════════════════
 
-; ─── Clear logs function. ────────────────────────────────────────────────────────────────────
-ClearLogs:
-global MusicLogFile
-FileDelete, %MusicLogFile%
-CustomTrayTip(MusicLogFile . " cleared successfully", 1)
-return
+GetBitrate(file) {
+    global player
 
-
-AdjustVolume:
-    GuiControlGet, VolumeSlider
-    player.settings.volume := VolumeSlider
-return
-
-
-UpdateTrackInfo:
-    if (player.currentMedia) {
-        pos := Round(player.controls.currentPosition)
-        dur := Round(player.currentMedia.duration)
-        timeStr := FormatTime(pos) . " / " . FormatTime(dur)
-        GuiControl,, TimeDisplay, %timeStr%
-        if (dur > 0)
-            GuiControl,, SeekSlider, % (pos * 100 // dur)
+    try {
+        media := player.newMedia(file)
+        bitrate := media.getItemInfo("Bitrate")
+        return bitrate ? bitrate . " kbps" : "?"
+    } catch e {
+        return "?"
     }
-return
+}
 
+GetDuration(file) {
+    global player
 
-SeekTrack:
-    GuiControlGet, SeekSlider
-    if (player.currentMedia) {
-        dur := player.currentMedia.duration
-        newPos := (SeekSlider / 100.0) * dur
-        player.controls.currentPosition := newPos
+    try {
+        media := player.newMedia(file)
+        duration := media.duration
+        return duration ? FormatTime(Round(duration)) : "?"
+    } catch e {
+        return "?"
     }
-return
+}
 
+GetFileName(path) {
+    SplitPath, path,,, ext, name_no_ext
+    return name_no_ext . "." . ext
+}
 
 FormatTime(seconds) {
-    return Format("{:02}:{:02}", seconds//60, Mod(seconds, 60))
+    minutes := seconds // 60
+    seconds := Mod(seconds, 60)
+    return Format("{:02d}:{:02d}", minutes, seconds)
 }
 
+EnsureDirExists() {
+    if !FileExist(audioDir)
+        FileCreateDir, %audioDir%
+}
 
-GuiDropFiles:
-    Loop, Parse, A_GuiEvent, `n
-    {
-        file := A_LoopField
-        if (file ~= "\.(mp3|wav)$" && FileExist(file)) {
-            playlist.Push(file)
-        }
-    }
-    SavePlaylist()
-    RefreshListView()
-return
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; EVENT HANDLERS
+; ═══════════════════════════════════════════════════════════════════════════════════════
 
-
-; Right-click menu to delete track
-~RButton::
-    MouseGetPos,,, hwnd, control
-    if (control = "SysListView321") {
-        Gui, ListView, TrackList
-        LV_GetNext(RowNum, "Focused")
-        if RowNum {
-            LV_GetText(currentFile, RowNum, 5)  ; Get full path from Col5
-            FileToDelete := playlist[RowNum]
-            MsgBox, 4,, Remove this track from playlist?
-            Log("DEBUG", "Delete track, remove this track from playlist?")
-            IfMsgBox Yes
-            {
-                playlist.RemoveAt(RowNum)
-                SavePlaylist()
-                RefreshListView()
+TrackClicked:
+    if (A_GuiEvent = "DoubleClick") {
+        row := A_EventInfo
+        if (row > 0) {
+            LV_GetText(filePath, row, 6)  ; Get full path from hidden column
+            if FileExist(filePath) {
+                currentIndex := row
+                PlayCurrent(filePath)
             }
         }
     }
-return
-
-
-TrayPlayPause:
-PlayPause()
-return
-
-
-TrayStop:
-StopTrack()
-return
-
-
-TrayNext:
-NextTrack()
-return
-
-
-TrackClicked:
-    if (A_GuiEvent = "ColClick") {
+    else if (A_GuiEvent = "ColClick") {
+        ; Handle column sorting
         if (A_EventInfo = sortCol)
             sortDir := (sortDir = "Asc") ? "Desc" : "Asc"
         else {
@@ -532,232 +446,264 @@ TrackClicked:
             sortDir := "Asc"
         }
 
-        Gui, ListView, TrackList
-        LV_ModifyCol(sortCol, sortDir)
+        ; Save sort preferences
+        IniWrite, %sortCol%, %MusicIniFile%, Sort, Column
+        IniWrite, %sortDir%, %MusicIniFile%, Sort, Direction
 
-        row := LV_GetNext()
-        if row {
-            currentIndex := row
-            LV_GetText(currentFile, row, 5)
-        }
+        ; Apply sort (simplified)
+        LoadPlaylist()
     }
-    else if (A_GuiEvent = "DoubleClick") {
-        row := A_EventInfo
-        LV_GetText(filePath, row, 5)
-        Log("DEBUG", "File path from LV_GetText: " . filePath)
-        if FileExist(filePath) {
-            PlayCurrent(filePath)
-        } else {
-            MsgBox, 16, Error, File not found:n%filePath%
-            Log("ERROR", "Track clicked, file not found from LV_GetText: " . filePath)
+return
+
+GuiContextMenu:
+    if (A_GuiControl = "TrackList") {
+        Menu, TrackMenu, Show
+    }
+return
+
+AdjustVolume:
+    GuiControlGet, VolumeSlider
+    player.settings.volume := VolumeSlider
+    GuiControl,, VolumeDisplay, %VolumeSlider%`%
+    Log("DEBUG", "Volume adjusted to: " . VolumeSlider)
+return
+
+SeekTrack:
+    GuiControlGet, SeekSlider
+    if (player.currentMedia) {
+        dur := player.currentMedia.duration
+        if (dur > 0) {
+            newPos := (SeekSlider / 100.0) * dur
+            player.controls.currentPosition := newPos
         }
     }
 return
 
+UpdateTrackInfo:
+    if (player.currentMedia && isPlaying) {
+        pos := Round(player.controls.currentPosition)
+        dur := Round(player.currentMedia.duration)
 
-ConvertToMP3(filePath) {
-    SplitPath, filePath, name, dir, ext, name_no_ext
+        if (dur > 0) {
+            timeStr := FormatTime(pos) . " / " . FormatTime(dur)
+            GuiControl,, TimeDisplay, %timeStr%
 
-    ; Check if already mp3 (case-insensitive)
-    StringLower, extLower, ext
-    if (extLower = "mp3") {
-        ShowCustomMsgBox("Info", "File is already an MP3. Conversion skipped.", 1000, 300)
-        Log("INFO", "Convert to MP3 skipped because file is already an mp3: " . filePath)
-        return
-    }
+            progress := Round((pos / dur) * 100)
+            GuiControl,, SeekSlider, %progress%
 
-    if (!dir) {
-        MsgBox, 16, Error, Could not extract directory from:`n%filePath%
-        ShowCustomMsgBox("Error", "Could not extract directory from:"`n%filePath%, 1000, 300)
-        Log("ERROR", "Convert to MP3, Could not extract directory from: " . filePath)
-        return
-    }
-
-    ffmpeg := A_ScriptDir . "\tools\ffmpeg.exe"
-    if !FileExist(ffmpeg) {
-        MsgBox, 16, Error, ffmpeg.exe not found in /tools
-        Log("ERROR", "Convert to MP3, ffmpeg.exe not found in /tools")
-        return
-    }
-
-    baseOutput := dir . "\" . name_no_ext
-    outputFile := baseOutput . ".mp3"
-    Log("DEBUG", "Convert to MP3, converting: " . filePath . " -> " . outputFile)
-
-    if FileExist(outputFile) {
-        choice := ConfirmFileExists(outputFile)
-        if (choice = "override") {
-            FileDelete, %outputFile%
-            Log("DEBUG", "Conversion succeeded: " . outputFile)
-        } else if (choice = "append") {
-            Loop {
-                newFile := baseOutput . " (copy" . (A_Index > 1 ? " " A_Index : "") . ").mp3"
-                if !FileExist(newFile) {
-                    outputFile := newFile
-                    break
-                }
+            ; Check if track ended
+            if (pos >= dur - 1) {
+                NextTrack()
             }
-        } else { ; skip or GUI closed
-            MsgBox, 48, Cancelled, Conversion cancelled by user.
-            Log("INFO", "Convert to MP3, conversion cancelled by user.")
-            return
         }
     }
+return
 
-    StringReplace, filePathEsc, filePath, ", "", All
-    StringReplace, outputFileEsc, outputFile, ", "", All
-
-    RunWait, %ComSpec% /c ""%ffmpeg%" -y -i "%filePathEsc%" -codec:a libmp3lame -qscale:a 2 "%outputFileEsc%"", , Hide
-
-    if FileExist(outputFile)
-        ShowCustomMsgBox("Success", "MP3 saved to:`n" . outputFile, 1000, 300)
-    else {
-        MsgBox, 16, Error, Conversion failed.
-        Log("ERROR", "Convert to MP3, conversion failed.")
+GuiDropFiles:
+    Loop, Parse, A_GuiEvent, `n
+    {
+        file := A_LoopField
+        SplitPath, file,,, ext
+        StringLower, ext, ext
+        if (ext = "mp3" || ext = "wav" || ext = "flac" || ext = "m4a" || ext = "wma") {
+            ; Copy file to audio directory
+            SplitPath, file, fileName
+            newPath := audioDir . "\" . fileName
+            FileCopy, %file%, %newPath%
+            Log("INFO", "File added: " . newPath)
+        }
     }
-}
+    LoadPlaylist()
+return
 
+ViewLogs:
+    if FileExist(MusicLogFile)
+        Run, notepad.exe "%MusicLogFile%"
+    else
+        MsgBox, 48, Info, No log file found.
+return
 
-ConfirmFileExists(file) {
-     ; Decide where to show InputBox (e.g., to the right)
-        inputX := x + w + 10     ; 10 pixels to the right of the main window
-        inputY := y + 100        ; a bit lower than top
-    static guiID := "ConfirmFileExistsGui"
-    Gui, %guiID%:New, +AlwaysOnTop +Owner +ToolWindow, Confirm Action
-    Gui, %guiID%:Font, s10 cRed q5
-    Gui, %guiID%:Add, Text,, MP3 already exists:
-    Gui, Font
-    Gui, %guiID%:Font, s10 q5
-    SplitPath, file, nameOnly
-    Gui, %guiID%:Add, Text,, %nameOnly%
-    Gui, Font
-    Gui, %guiID%:Add, Button, gOverride w100 Default, Override
-    Gui, %guiID%:Add, Button, gAppendCopy w100, Append Copy
-    Gui, %guiID%:Add, Button, gSkip w100, Skip
-    Gui, %guiID%:Show,, File Exists
+ClearLogs:
+    FileDelete, %MusicLogFile%
+    SB_SetText("Log file cleared")
+    Log("INFO", "Log file cleared")
+return
 
-    choice := ""
-    Gui, %guiID%: +OwnDialogs
-    Gui, %guiID%: +LastFound
-    Loop {
-        Sleep, 50
-        if (choice != "")
-            break
-        Gui, %guiID%:Submit, NoHide
+GuiClose:
+    ; Save current state
+    IniWrite, %currentIndex%, %MusicIniFile%, State, CurrentIndex
+    Log("INFO", "Music Player shutting down")
+    ExitApp
+
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; CONTEXT MENU HANDLERS
+; ═══════════════════════════════════════════════════════════════════════════════════════
+
+OnPlay:
+    Gui, ListView, TrackList
+    row := LV_GetNext()
+    if (row) {
+        LV_GetText(filePath, row, 6)
+        currentIndex := row
+        PlayCurrent(filePath)
     }
-
-    Return choice
-
-    Override:
-        choice := "override"
-        Gui, %guiID%:Destroy
-        Return
-    AppendCopy:
-        choice := "append"
-        Gui, %guiID%:Destroy
-        Return
-    Skip:
-        choice := "skip"
-        Gui, %guiID%:Destroy
-        Return
-        Log("DEBUG", "Trying to play: " . filePath)
-}
-
-
-currentIndex := row
-
+return
 
 OnConvertToMP3:
     Gui, ListView, TrackList
     row := LV_GetNext()
     if (row) {
-        LV_GetText(filePath, row, 5) ; Get full path from hidden column 5
-        Log("DEBUG", "Selected row: " . row . ", File path: " . filePath)
-        Log("DEBUG", "filePath raw from LV = '" . filePath . "'")
-
+        LV_GetText(filePath, row, 6)
         if FileExist(filePath)
             ConvertToMP3(filePath)
-        else
-            MsgBox, 48, "Warning, File does not exist:`n" filePath
-               Log("ERROR", "On convert to MP3, file does not exist: " . filePath)
-    } else {
-        MsgBox, 48, Warning, No file selected.
-        ShowCustomMsgBox("Warning", "No file selected.", 1000, 300)
-        Log("WARNING", "On convert to MP3, trying to play: " . track . filePath)
     }
 return
 
-
-RefreshListView()
-
-
-; ─── Log function. ────────────────────────────────────────────────────────────────────
-Log(level, msg) {
-global MusicLogFile
-    static needsRotation := true
-    static inLog := false  ;recursion guard
-
-    if (inLog)
-        return  ;Already logging, avoid recursion
-
-    inLog := true
-
-    if (needsRotation && FileExist( MusicLogFile)) {
-        FileGetSize, logSize, %MusicLogFile%
-        if (logSize > 1024000) {  ;>1MB
-            FormatTime, timestamp,, yyyyMMdd_HHmmss
-            FileMove, %MusicLogFile%, %A_ScriptDir%\rpcl3_music_player_%timestamp%.log
-        }
-        needsRotation := false
+OnShowInExplorer:
+    Gui, ListView, TrackList
+    row := LV_GetNext()
+    if (row) {
+        LV_GetText(filePath, row, 6)
+        Run, explorer.exe /select`, "%filePath%"
     }
+return
+
+OnCopyPath:
+    Gui, ListView, TrackList
+    row := LV_GetNext()
+    if (row) {
+        LV_GetText(filePath, row, 6)
+        Clipboard := filePath
+        TrayTip, Copied, File path copied to clipboard., 2, 1
+    }
+return
+
+OnRenameFile:
+    Gui, ListView, TrackList
+    row := LV_GetNext()
+    if (row) {
+        LV_GetText(filePath, row, 6)
+        SplitPath, filePath, name, dir, ext, nameNoExt
+
+        InputBox, newName, Rename File, Enter new filename (without extension):, , 300, 130, , , , , %nameNoExt%
+        if !ErrorLevel {
+            newPath := dir . "\" . newName . "." . ext
+            FileMove, %filePath%, %newPath%
+            if !ErrorLevel {
+                LoadPlaylist()
+                Log("INFO", "File renamed: " . filePath . " -> " . newPath)
+            }
+        }
+    }
+return
+
+OnDeleteFile:
+    Gui, ListView, TrackList
+    row := LV_GetNext()
+    if (row) {
+        LV_GetText(filePath, row, 6)
+
+        MsgBox, 52, Confirm Delete, Are you sure you want to delete this file?`n`n%filePath%
+        IfMsgBox Yes
+        {
+            FileRecycle, %filePath%
+            LoadPlaylist()
+            Log("INFO", "File deleted: " . filePath)
+        }
+    }
+return
+
+OnTrackInfo:
+    Gui, ListView, TrackList
+    row := LV_GetNext()
+    if (row) {
+        LV_GetText(filePath, row, 6)
+        if FileExist(filePath) {
+            FileGetSize, size, %filePath%
+            FileGetTime, modified, %filePath%
+
+            info := "File: " . GetFileName(filePath) . "`n"
+            info .= "Path: " . filePath . "`n"
+            info .= "Size: " . Round(size/1024/1024, 2) . " MB`n"
+            info .= "Modified: " . modified . "`n"
+            info .= "Bitrate: " . GetBitrate(filePath) . "`n"
+            info .= "Duration: " . GetDuration(filePath)
+
+            MsgBox, 64, Track Information, %info%
+        }
+    }
+return
+
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; CONVERSION FUNCTIONS
+; ═══════════════════════════════════════════════════════════════════════════════════════
+
+ConvertToMP3(filePath) {
+    if !FileExist(ffmpeg) {
+        MsgBox, 16, Error, ffmpeg.exe not found in /tools folder.
+        return
+    }
+
+    SplitPath, filePath, name, dir, ext, name_no_ext
+
+    ; Check if already MP3
+    StringLower, extLower, ext
+    if (extLower = "mp3") {
+        MsgBox, 64, Info, File is already an MP3.
+        return
+    }
+
+    outputFile := dir . "\" . name_no_ext . ".mp3"
+
+    ; Check if output file exists
+    if FileExist(outputFile) {
+        MsgBox, 52, File Exists, Output file already exists. Overwrite?
+        IfMsgBox No
+            return
+        FileDelete, %outputFile%
+    }
+
+    ; Show progress
+    SB_SetText("Converting to MP3...")
+
+    ; Convert
+    RunWait, %ComSpec% /c ""%ffmpeg%" -i "%filePath%" -codec:a libmp3lame -b:a 192k "%outputFile%"", , Hide
+
+    if FileExist(outputFile) {
+        SB_SetText("Conversion successful!")
+        LoadPlaylist()  ; Refresh to show new file
+        Log("INFO", "Converted: " . filePath . " -> " . outputFile)
+    } else {
+        SB_SetText("Conversion failed!")
+        Log("ERROR", "Conversion failed: " . filePath)
+    }
+
+    SetTimer, ClearStatus, 3000
+}
+
+ClearStatus:
+    SB_SetText("Ready")
+    SetTimer, ClearStatus, Off
+return
+
+; ═══════════════════════════════════════════════════════════════════════════════════════
+; LOGGING FUNCTION
+; ═══════════════════════════════════════════════════════════════════════════════════════
+
+Log(level, msg) {
+    static inLog := false
+
+    if (inLog) return
+    inLog := true
 
     try {
         FormatTime, timestamp,, yyyy-MM-dd HH:mm:ss
-        logEntry := "[" timestamp "] [" level "] " msg "`n"
+        logEntry := "[" . timestamp . "] [" . level . "] " . msg . "`n"
         FileAppend, %logEntry%, %MusicLogFile%
-    }
-    catch e {
-        FormatTime, timestamp,, yyyy-MM-dd HH:mm:ss
-        FileAppend, [%timestamp%] [MAIN-LOG-FAILED] %e%`n, %rpcl3_music_player_fallbackLog%
-        FileAppend, %logEntry%, %rpcl3_music_player_fallbackLog%
-
-        ;User notifications
-        SB_SetText("LOG ERROR: Check rpcl3_music_player_fallback.log.", 1)
+    } catch e {
+        ; Fallback - show in status bar
+        SB_SetText("Log error: " . e.message)
     }
 
     inLog := false
 }
-
-ShowCustomMsgBox(title, text, x := "", y := "") {
-    Gui, MsgBoxGui:New, +AlwaysOnTop +ToolWindow, %title%
-    Gui, MsgBoxGui:Add, Text,, %text%
-    Gui, MsgBoxGui:Add, Button, gCloseCustomMsgBox Default, OK
-
-    ; Auto-position if x/y provided
-    if (x != "" && y != "")
-        Gui, MsgBoxGui:Show, x%x% y%y% AutoSize
-    else
-        Gui, MsgBoxGui:Show, AutoSize Center
-}
-
-CloseCustomMsgBox:
-    Gui, MsgBoxGui:Destroy
-return
-
-
-; ─── Custom tray tip function ────────────────────────────────────────────────────────────────────
-CustomTrayTip(Text, Icon := 1) {
-    ;Parameters:
-    ;Text  - Message to display
-    ;Icon  - 0=None, 1=Info, 2=Warning, 3=Error (default=1)
-    static Title := "RPCL3 Launcher"
-    ;Validate icon input (clamp to 0-3 range)
-    Icon := (Icon >= 0 && Icon <= 3) ? Icon : 1
-    ;16 = No sound (bitwise OR with icon value)
-    TrayTip, %Title%, %Text%, , % Icon|16
-}
-
-
-GuiClose:
-SavePlaylist()
-ExitApp
