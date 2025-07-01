@@ -1,127 +1,113 @@
-Oplossing 1: Picture control verversen
-Voeg deze regel toe na het instellen van de nieuwe afbeelding:
+With this logic below to find a game in the database, I have to construct the correct runcommand to write to the inifile:
+IniWrite, %runCommand%, %A_ScriptDir%\rpcl3.ini, RUN_GAME, RunCommand
+The endresult should look like this example: RunCommand=rpcs3.exe --no-gui --fullscreen "games/Ridge Racer 7 [BLUS30001]/PS3_GAME/USRDIR/EBOOT.BIN"
+This path, which is different for every game, is always in the Eboot column in the database, rpcs3.exe is always in the script directory.
+The code so far:
+RunGame:
+    global iniFile, rpcs3Exe
 
-ShowGameIcon(rowIndex) {
-    if (G_IconPaths.MaxIndex() < rowIndex) {
-        GuiControl,, GameIcon,
-        GuiControl,, ImageStatus, No data for this row
+    ; Kill any existing RPCS3 processes
+    RunWait, taskkill /im %rpcs3Exe% /F,, Hide
+    Sleep, 1000
+
+    ; Make sure we can access global arrays
+    Global G_GameIds, G_GameTitles, G_EbootPaths
+
+    selectedRow := LV_GetNext()
+    if (!selectedRow) {
+        MsgBox, 48, No Selection, Please select a game from the list.
         return
     }
 
-    iconPath := G_IconPaths[rowIndex]
+    ; Debug: Check array status first
+    G_GameIds_MaxIndex := G_GameIds.MaxIndex()
+    G_GameTitles_MaxIndex := G_GameTitles.MaxIndex()
+    G_EbootPaths_MaxIndex := G_EbootPaths.MaxIndex()
 
-    if (iconPath != "" && FileExist(iconPath)) {
-        GuiControl,, GameIcon, %iconPath%
-        GuiControl, Move, GameIcon, x470 y107 w600 h400  ; Forceer de grootte opnieuw
-        GuiControl,, ImageStatus, Click icon for larger view
-        CurrentSelectedRow := rowIndex
-    } else {
-        GuiControl,, GameIcon,
-        if (iconPath != "") {
-            GuiControl,, ImageStatus, Icon not found: %iconPath%
-        } else {
-            GuiControl,, ImageStatus, No icon path available
-        }
-        CurrentSelectedRow := rowIndex
+    ; Check if G_GameIds exists (will be blank if undefined)
+    arrayExists := (G_GameIds_MaxIndex != "") ? "Yes" : "No"
+
+    ; Show debug info about arrays
+    ;MsgBox, 0, Array Debug, Selected Row: %selectedRow%`nG_GameIds MaxIndex: %G_GameIds_MaxIndex%`nG_GameTitles MaxIndex: %G_GameTitles_MaxIndex%`nG_EbootPaths MaxIndex: %G_EbootPaths_MaxIndex%`nArrays Exist: %arrayExists%
+    Log("DEBUG"
+        , "Selected Row: " . selectedRow
+        . "`nG_GameIds MaxIndex: " . G_GameIds_MaxIndex
+        . "`nG_GameTitles MaxIndex: " . G_GameTitles_MaxIndex
+        . "`nG_EbootPaths MaxIndex: " . G_EbootPaths_MaxIndex
+        . "`nArrays Exist: " . arrayExists)
+
+    ; Check if arrays exist and have data
+    if (G_GameIds_MaxIndex = "" || G_GameIds_MaxIndex < selectedRow) {
+    ;MsgBox, 16, No Data, Arrays not populated or insufficient data.`nSelected Row: %selectedRow%`nArray Size: %G_GameIds_MaxIndex%`n`nPlease perform a search first to populate the data.
+    Log("DEBUG"
+        , "Selected Row: " . selectedRow
+        . "`nG_GameIds MaxIndex: " . G_GameIds_MaxIndex
+        . "`nG_GameTitles MaxIndex: " . G_GameTitles_MaxIndex
+        . "`nG_EbootPaths MaxIndex: " . G_EbootPaths_MaxIndex
+        . "`nArrays Exist: " . arrayExists
+        . "`nPlease perform a search first to populate the data.")
+
+    return
     }
-}
-Oplossing 2: Lege afbeelding eerst instellen
-ShowGameIcon(rowIndex) {
-    if (G_IconPaths.MaxIndex() < rowIndex) {
-        GuiControl,, GameIcon,
-        GuiControl,, ImageStatus, No data for this row
+
+    ; Get game info from global arrays
+    gameId := G_GameIds[selectedRow]
+    gameTitle := G_GameTitles[selectedRow]
+    ebootPath := G_EbootPaths[selectedRow]
+
+    ; Debug what we retrieved
+    ;MsgBox, 0, Debug Retrieved, Row: %selectedRow%`nArray Size: %G_GameIds_MaxIndex%`nGameId: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
+    Log("DEBUG"
+        , "Retrieved row data:"
+        . "`nRow: " . selectedRow
+        . "`nArray Size: " . G_GameIds_MaxIndex
+        . "`nGameId: " . gameId
+        . "`nTitle: " . gameTitle
+        . "`nEboot: " . ebootPath)
+
+    if (gameId = "") {
+        MsgBox, 16, Error, No game ID found for row %selectedRow%.
         return
     }
 
-    iconPath := G_IconPaths[rowIndex]
-
-    if (iconPath != "" && FileExist(iconPath)) {
-        GuiControl,, GameIcon,  ; Eerst leegmaken
-        Sleep, 10  ; Korte pauze
-        GuiControl,, GameIcon, %iconPath%  ; Dan de nieuwe afbeelding
-        GuiControl,, ImageStatus, Click icon for larger view
-        CurrentSelectedRow := rowIndex
-    } else {
-        GuiControl,, GameIcon,
-        if (iconPath != "") {
-            GuiControl,, ImageStatus, Icon not found: %iconPath%
-        } else {
-            GuiControl,, ImageStatus, No icon path available
-        }
-        CurrentSelectedRow := rowIndex
-    }
-}
-Oplossing 3: Picture control met schaaloptie
-Wijzig je GUI definitie om schaling te forceren:
-
-Gui, Add, Picture, vGameIcon x470 y107 w600 h400 gShowLargeImage 0x40000000
-De 0x40000000 flag forceert het picture control om afbeeldingen te schalen naar de opgegeven dimensies.
-
-Oplossing 4: GUI refresh na afbeelding instellen
-ShowGameIcon(rowIndex) {
-    ; ... je bestaande code ...
-
-    if (iconPath != "" && FileExist(iconPath)) {
-        GuiControl,, GameIcon, %iconPath%
-        Gui, Show  ; GUI refreshen
-        GuiControl,, ImageStatus, Click icon for larger view
-        CurrentSelectedRow := rowIndex
-    }
-    ; ... rest van je code ...
-}
-Probeer eerst Oplossing 1 - dat lost meestal dit soort schaalproblemen op. Als dat niet werkt, kun je Oplossing 3 proberen met de schaalflag bij de GUI definitie.
-
-You
-I don't need the option to scale it to Gui, 2: Show, w600 h400 we can drop that, the picture should be shown once in the format width w260 and height h175
-
-assistant logo
-ChatDPG
-Je kunt de ShowLargeImage functie aanpassen om de afbeelding in het gewenste formaat (260x175) te tonen:
-
-ShowLargeImage:
-    if (CurrentSelectedRow <= 0 || G_PicPaths.MaxIndex() < CurrentSelectedRow)
-        return
-
-    picPath := G_PicPaths[CurrentSelectedRow]
-
-    if (picPath = "" || !FileExist(picPath)) {
-        if (picPath != "") {
-            MsgBox, 48, Image Not Found, Large image file not found:`n%picPath%
-        } else {
-            MsgBox, 48, Image Not Found, No large image path available for this game.
-        }
+    if (ebootPath = "") {
+        MsgBox, 16, Error, Could not find Eboot path for selected game.`nRow: %selectedRow%`nGameId: %gameId%`nTitle: %gameTitle%
         return
     }
 
-    Gui, 2: New, , Game Image
-    Gui, 2: Add, Picture, x10 y10 w260 h175, %picPath%
-    Gui, 2: Show, w290 h205
+    ; Confirm launch
+    MsgBox, 4, Confirm Launch, Launch this game?`n`nGame ID: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
+
+    IfMsgBox, Yes
+
+    ; Get RunCommand from INI
+    IniRead, runCommand, %iniFile%, RUN_GAME, RunCommand
+    if (runCommand = "ERROR" or runCommand = "") {
+        MsgBox, 16, Error, Failed to read RunCommand from INI.
+        return
+    }
+    Log("DEBUG", "Read from INI: " . runCommand)
+
+    ; Wrap the entire command in quotes for cmd.exe safety
+    fullRunCmd := ComSpec . " /c " . Chr(34) . runCommand . Chr(34)
+
+    Log("DEBUG", "Running command: " . fullRunCmd)
+
+    ; Actually run the command
+    Run, %fullRunCmd%, , , newPID
+
+    ; Check if RPCS3 started
+    Sleep, 2000
+    Process, Exist, %rpcs3Exe%
+    if (!ErrorLevel) {
+        MsgBox, 16, Error, Failed to launch RPCS3:`n%runCommand%
+        Log("ERROR", "RPCS3 failed to launch.")
+        SB_SetText("ERROR: RPCS3 did not launch.", 2)
+        return
+    }
+    if (!muteSound)
+    SoundPlay, %A_ScriptDir%\media\rpcl3_good_morning.wav, 1
+    Log("DEBUG", "Started RPCS3 with command from INI.")
+    SB_SetText("Good Morning! Your Game Started.", 2)
+    UpdateStatusBar("Good Morning! Your Game Started. ", 3)
 return
-De wijzigingen:
-
-Picture control: w260 h175 voor de gewenste afmetingen
-Gui window: w290 h205 (260+20 voor padding + 175+20 voor padding + 10 voor titlebar)
-Verwijderd: +Resize +MaximizeBox opties omdat je een vaste grootte wilt
-Het venster zal nu altijd de afbeelding tonen in 260×175 pixels zonder mogelijkheid tot resizing.
-
-You
-what does this part do? Gui, 2: Show, w290 h205
-
-assistant logo
-ChatDPG
-Gui, 2: Show, w290 h205 doet het volgende:
-
-Gui, 2: - Verwijst naar GUI venster nummer 2 (het nieuwe venster dat je net hebt aangemaakt)
-Show - Maakt het venster zichtbaar op het scherm
-w290 - Stelt de breedte van het hele venster in op 290 pixels
-h205 - Stelt de hoogte van het hele venster in op 205 pixels
-De reden waarom het venster (290x205) groter is dan de afbeelding (260x175):
-
-Breedte: 260 (afbeelding) + 10 (x-positie) + 20 (padding rechts) = 290
-Hoogte: 175 (afbeelding) + 10 (y-positie) + 20 (padding onder) = 205
-Dit zorgt ervoor dat je afbeelding netjes binnen het venster past met wat ruimte eromheen, plus ruimte voor de titlebar van het venster.
-
-Als je het venster precies op de afbeeldingsgrootte wilt instellen, kun je proberen:
-
-Gui, 2: Show, w280 h195
-Dit geeft minder padding maar houdt nog steeds rekening met de venster borders en titlebar.
