@@ -1,114 +1,102 @@
-RunGame:
-    global iniFile, rpcs3Exe
+AudioCapture:
 
-    ; Kill any existing RPCS3 processes
-    RunWait, taskkill /im %rpcs3Exe% /F,, Hide
-    Sleep, 1000
+; Prompt the user to confirm audio device setup
+MsgBox, 52, Warning, Did you already set the audio devices in RPCS3 (CABLE Input/Output)?
+IfMsgBox No
+{
+    ; Kill RPCS3 and exit
+    Process, Close, rpcs3.exe
+    MsgBox, 48, Info, RPCS3 was closed because it must use the correct audio devices.
+    return
+}
+; If user clicks Yes, continue recording setup
 
-    ; Make sure we can access global arrays
-    Global G_GameIds, G_GameTitles, G_EbootPaths
+if !ProcessExist("rpcs3.exe") {
+    CustomTrayTip("Cannot Record, RPCS3 is not running.", 1)
+    return
+}
 
-    selectedRow := LV_GetNext()
-    if (!selectedRow) {
-        MsgBox, 48, No Selection, Please select a game from the list.
-        return
-    }
+    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "CABLE Input" 1, , Hide
+    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "CABLE Output" 1, , Hide
 
-    ; Debug: Check array status first
-    G_GameIds_MaxIndex := G_GameIds.MaxIndex()
-    G_GameTitles_MaxIndex := G_GameTitles.MaxIndex()
-    G_EbootPaths_MaxIndex := G_EbootPaths.MaxIndex()
+    CustomTrayTip("Audio output set to CABLE Input, audio input set to CABLE Output.", 1)
+    Sleep, 1500
 
-    ; Check if G_GameIds exists (will be blank if undefined)
-    arrayExists := (G_GameIds_MaxIndex != "") ? "Yes" : "No"
-
-    ; Show debug info about arrays
-    Log("DEBUG"
-        , "Selected Row: " . selectedRow
-        . "`nG_GameIds MaxIndex: " . G_GameIds_MaxIndex
-        . "`nG_GameTitles MaxIndex: " . G_GameTitles_MaxIndex
-        . "`nG_EbootPaths MaxIndex: " . G_EbootPaths_MaxIndex
-        . "`nArrays Exist: " . arrayExists)
-
-    ; Check if arrays exist and have data
-    if (G_GameIds_MaxIndex = "" || G_GameIds_MaxIndex < selectedRow) {
-        Log("DEBUG"
-            , "Selected Row: " . selectedRow
-            . "`nG_GameIds MaxIndex: " . G_GameIds_MaxIndex
-            . "`nG_GameTitles MaxIndex: " . G_GameTitles_MaxIndex
-            . "`nG_EbootPaths MaxIndex: " . G_EbootPaths_MaxIndex
-            . "`nArrays Exist: " . arrayExists
-            . "`nPlease perform a search first to populate the data.")
-        return
-    }
-
-    ; Get game info from global arrays
-    gameId := G_GameIds[selectedRow]
-    gameTitle := G_GameTitles[selectedRow]
-    ebootPath := G_EbootPaths[selectedRow]
-
-    ; Debug what we retrieved
-    Log("DEBUG"
-        , "Retrieved row data:"
-        . "`nRow: " . selectedRow
-        . "`nArray Size: " . G_GameIds_MaxIndex
-        . "`nGameId: " . gameId
-        . "`nTitle: " . gameTitle
-        . "`nEboot: " . ebootPath)
-
-    if (gameId = "") {
-        MsgBox, 16, Error, No game ID found for row %selectedRow%.
-        return
-    }
-
-    if (ebootPath = "") {
-        MsgBox, 16, Error, Could not find Eboot path for selected game.`nRow: %selectedRow%`nGameId: %gameId%`nTitle: %gameTitle%
-        return
-    }
-
-    ; **CORRECTED: Construct the runCommand using the eboot path as-is**
-    ; The ebootPath already contains the complete path like "dev_hdd0/game/SCEEXE000/USRDIR/EBOOT.BIN"
-    runCommand := "rpcs3.exe --no-gui --fullscreen " . Chr(34) . ebootPath . Chr(34)
-
-    ; Write the runCommand to INI file
-    IniWrite, %runCommand%, %A_ScriptDir%\rpcl3.ini, RUN_GAME, RunCommand
-
-    Log("DEBUG", "Constructed runCommand: " . runCommand)
-
-    ; Confirm launch
-    MsgBox, 4, Confirm Launch, Launch this game?`n`nGame ID: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
-
-    IfMsgBox, Yes
+    if !recording
     {
-        ; Get RunCommand from INI (now it should exist)
-        IniRead, runCommand, %iniFile%, RUN_GAME, RunCommand
-        if (runCommand = "ERROR" or runCommand = "") {
-            MsgBox, 16, Error, Failed to read RunCommand from INI.
-            return
-        }
-        Log("DEBUG", "Read from INI: " . runCommand)
+        FormatTime, ts,, yyyy-MM-dd_HH-mm-ss
+        FileCreateDir, %A_ScriptDir%\rpcl3_recordings
+        outFile := A_ScriptDir "\rpcl3_recordings\rpcs3_audio_" ts ".wav"
+        audioDevice := "CABLE Output (VB-Audio Virtual Cable)"
 
-        ; Wrap the entire command in quotes for cmd.exe safety
-        fullRunCmd := ComSpec . " /c " . Chr(34) . runCommand . Chr(34)
+        ffArgs := "-f dshow -i audio=""" audioDevice """ -acodec pcm_s16le -ar 48000 -ac 2 """ outFile """"
+        Run, % ffmpegExe " " ffArgs, , , ffmpegPID
 
-        Log("DEBUG", "Running command: " . fullRunCmd)
-
-        ; Actually run the command
-        Run, %fullRunCmd%, , , newPID
-
-        ; Check if RPCS3 started
-        Sleep, 2000
-        Process, Exist, %rpcs3Exe%
-        if (!ErrorLevel) {
-            MsgBox, 16, Error, Failed to launch RPCS3:`n%runCommand%
-            Log("ERROR", "RPCS3 failed to launch.")
-            SB_SetText("ERROR: RPCS3 did not launch.", 2)
-            return
-        }
-        if (!muteSound)
-            SoundPlay, %A_ScriptDir%\media\rpcl3_good_morning.wav, 1
-        Log("DEBUG", "Started RPCS3 with command from INI.")
-        SB_SetText("Good Morning! Your Game Started.", 2)
-        UpdateStatusBar("Good Morning! Your Game Started. ", 3)
+    if ffmpegPID {
+        recording := true
+        GuiControl, +cFFCC66, AudioCapture
+    } else {
+        MsgBox, 48, Error, Could not start FFmpeg.
+        return
     }
+}
+else
+{
+    if ffmpegPID
+        Process, Close, %ffmpegPID%
+        ControlSend,, q, ahk_pid %ffmpegPID%.
+
+    recording := false
+    GuiControl, +c808080, AudioCapture
+    CustomTrayTip("Recording Stopped, Saved to: " . outFile, 1)
+    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "Speakers" 1, , Hide
+    CustomTrayTip("Audio output set to default", 1)
+
+    ; Get bitrate
+    ; Get file size (in bytes)
+    FileGetSize, fileSizeBytes, %outFile%
+
+    ; Use FFmpeg to get duration
+    ffmpegOutput := A_ScriptDir . "\ffmpeg_output.txt"
+    RunWait, %ComSpec% /c ""%ffmpegExe%" -i "%outFile%" 2> "%ffmpegOutput%"", , Hide
+
+    ; Read duration from FFmpeg output
+    FileRead, ffOut, %ffmpegOutput%
+    RegExMatch(ffOut, "Duration: (\d+):(\d+):(\d+)", d)
+    if (d1 != "" && d2 != "" && d3 != "") {
+        totalSeconds := d1 * 3600 + d2 * 60 + d3
+        bitrate := Round((fileSizeBytes * 8) / (totalSeconds * 1000)) . " kbps"
+    } else {
+        bitrate := "Unknown"
+    }
+
+    ; Optional: delete temporary ffmpeg output file
+    FileDelete, %ffmpegOutput%
+
+    Run, %FileCreateDir%
+}
+return
+
+
+SetAudio:
+if !FileExist(nircmd) {
+    MsgBox, 16, Error, nircmd.exe not found!
+    return
+}
+
+if (!audioPrepared) {
+    ; Prepare for recording
+    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "CABLE Input" 1, , Hide
+    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "CABLE Output" 2, , Hide
+    ShowCustomMsgBox("Ready", "Recording devices set.`nLaunch RPCS3 and hit record.", 500, 300)
+    Log("INFO", "Audio devices switched: Output = CABLE Input, Input = CABLE Output")
+    audioPrepared := true
+} else {
+    ; Revert to default
+    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "Speakers" 1, , Hide
+    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "Microphone" 2, , Hide
+    CustomTrayTip("Audio output/input set to default.", 1)
+    Log("INFO", "Audio devices reverted to default.")
+    audioPrepared := false
+}
 return
