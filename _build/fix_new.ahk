@@ -66,18 +66,14 @@ RunGame:
         return
     }
 
-    ; **NEW CODE: Construct the runCommand**
-    ; Build the full path to rpcs3.exe (assuming it's in script directory)
-    rpcs3FullPath := A_ScriptDir . "\" . rpcs3Exe
-
-    ; Construct the runCommand in the format: rpcs3.exe --no-gui --fullscreen "path/to/EBOOT.BIN"
-    runCommand := rpcs3FullPath . " --no-gui --fullscreen " . Chr(34) . ebootPath . Chr(34)
+    ; **CORRECTED: Construct the runCommand using the eboot path as-is**
+    ; The ebootPath already contains the complete path like "dev_hdd0/game/SCEEXE000/USRDIR/EBOOT.BIN"
+    runCommand := "rpcs3.exe --no-gui --fullscreen " . Chr(34) . ebootPath . Chr(34)
 
     ; Write the runCommand to INI file
     IniWrite, %runCommand%, %A_ScriptDir%\rpcl3.ini, RUN_GAME, RunCommand
 
     Log("DEBUG", "Constructed runCommand: " . runCommand)
-    ; **END NEW CODE**
 
     ; Confirm launch
     MsgBox, 4, Confirm Launch, Launch this game?`n`nGame ID: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
