@@ -1,6 +1,5 @@
 #Persistent
 #SingleInstance force
-#NoEnv
 SetBatchLines, -1
 SetTitleMatchMode, 2
 
@@ -9,137 +8,134 @@ SetTitleMatchMode, 2
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 
 ; Global variables
-global playlist := []
-global currentIndex := 1
-global audioDir := A_ScriptDir . "\rpcl3_recordings"
-global playlistFile := audioDir . "\rpcl3_playlist.m3u"
-global sortCol := 1
-global sortDir := "Asc"
-global TestTrack := audioDir . "\rpcl3_test.mp3"
-global CurrentTrack := ""
-global CurrentTrackName := ""
-global MusicLogFile := A_ScriptDir . "\rpcl3_music_player.log"
-global MusicIniFile := A_ScriptDir . "\rpcl3_music_player.ini"
-global LastMetaFile := ""
-global ffmpeg := A_ScriptDir . "\tools\ffmpeg.exe"
-global player := ""
-global MyGuiHwnd := ""
-global isPlaying := false
-global isPaused := false
+playlist := []
+currentIndex := 1
+audioDir := A_ScriptDir . "\rpcl3_recordings"
+playlistFile := audioDir . "\rpcl3_playlist.m3u"
+sortCol := 1
+sortDir := "Asc"
+TestTrack := audioDir . "\rpcl3_test.mp3"
+CurrentTrack := ""
+CurrentTrackName := ""
+MusicLogFile := A_ScriptDir . "\rpcl3_music_player.log"
+MusicIniFile := A_ScriptDir . "\rpcl3_music_player.ini"
+LastMetaFile := ""
+ffmpeg := A_ScriptDir . "\tools\ffmpeg.exe"
+player := ""
+MyGuiHwnd := ""
+isPlaying := false
+isPaused := false
+isShuffleMode := false
 
 ; Initialize application
-Init()
+Gosub, Init
 
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 ; MAIN FUNCTIONS
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 
-Init() {
+Init:
     ; Check dependencies
-    CheckDependencies()
+    Gosub, CheckDependencies
 
     ; Ensure directories exist
-    EnsureDirExists()
+    Gosub, EnsureDirExists
 
     ; Load settings
-    LoadSettings()
+    Gosub, LoadSettings
 
     ; Create GUI
-    CreateGUI()
+    Gosub, CreateGUI
 
     ; Load playlist
-    LoadPlaylist()
+    Gosub, LoadPlaylist
 
     ; Start timer for track info updates
     SetTimer, UpdateTrackInfo, 500
 
     ; Show GUI
     title := "RPCL3 Music Player - " . Chr(169) . " " . A_YYYY . " - Philip"
-    Gui, Show, w515 h482, %title%
+    Gui, Show, w515 h500, %title%
 
     Log("INFO", "Music Player initialized successfully")
-}
+return
 
-CheckDependencies() {
+CheckDependencies:
     ; Check if ffmpeg exists
     if !FileExist(ffmpeg) {
         MsgBox, 48, Warning, ffmpeg.exe not found in /tools folder.`nMP3 conversion will not be available.
         Log("WARNING", "ffmpeg.exe not found: " . ffmpeg)
     }
 
-    ; Test if test track exists, if not create a placeholder
+    ; Test if test track exists
     if !FileExist(TestTrack) {
-        ; Create a simple test file entry for demonstration
-        playlist.Push("No audio files found")
-        Log("INFO", "No test track found, placeholder created")
+        Log("INFO", "No test track found")
     } else {
         playlist.Push(TestTrack)
         CurrentTrack := TestTrack
         CurrentTrackName := GetFileName(TestTrack)
     }
-}
+return
 
-LoadSettings() {
+LoadSettings:
     ; Load sort preferences
     IniRead, sortCol, %MusicIniFile%, Sort, Column, 1
     IniRead, sortDir, %MusicIniFile%, Sort, Direction, Asc
+    IniRead, currentIndex, %MusicIniFile%, State, CurrentIndex, 1
 
-    ; Load other settings as needed
     Log("DEBUG", "Settings loaded: SortCol=" . sortCol . ", SortDir=" . sortDir)
-}
+return
 
-CreateGUI() {
-    Gui, +Resize +LastFound +HwndMyGuiHwnd
-    Gui, Font, s10 q5, Segoe UI
-    Gui, Margin, 15, 15
-
-    ; Main ListView
+CreateGUI:
     Gui, Add, ListView, vTrackList gTrackClicked x0 y0 w515 h227 AltSubmit Grid, Name|Size|Bitrate|Type|Duration
     Gui, ListView, TrackList
-    LV_InsertCol(6, 0, "Full Path")  ; Hidden column for full path
+    LV_InsertCol(6, 0, "Full Path")
     LV_ModifyCol(6, 0)
 
     ; Control buttons
-    Gui, Add, Text, gPlayPause x0 y228 w80 h23 Border +Center +0x200, ▶ Play
-    Gui, Add, Text, gStopTrack x80 y228 w60 h23 Border +Center +0x200, ⏹ Stop
-    Gui, Add, Text, gPrevTrack x140 y228 w60 h23 Border +Center +0x200, ⏮ Prev
-    Gui, Add, Text, gNextTrack x200 y228 w60 h23 Border +Center +0x200, ⏭ Next
-    Gui, Add, Text, gShuffle x260 y228 w60 h23 Border +Center +0x200, 🔀 Shuffle
-    Gui, Add, Text, gViewLogs x320 y228 w95 h23 Border +Center +0x200, 📋 Logs
-    Gui, Add, Text, gClearLogs x415 y228 w100 h23 Border +Center +0x200, 🗑 Clear
+    Gui, Add, Text, gPlayPause x0 y228 w80 h25 Border +Center +0x200 vPlayPauseBtn, ▶ Play
+    Gui, Add, Text, gStopTrack x80 y228 w60 h25 Border +Center +0x200, ⏹ Stop
+    Gui, Add, Text, gPrevTrack x140 y228 w60 h25 Border +Center +0x200, ⏮ Prev
+    Gui, Add, Text, gNextTrack x200 y228 w60 h25 Border +Center +0x200, ⏭ Next
+    Gui, Add, Text, gShuffleMode x260 y228 w60 h25 Border +Center +0x200 vShuffleBtn, 🔀 Shuffle
+    Gui, Add, Text, gViewLogs x415 y228 w50 h25 Border +Center +0x200, Logs
+    Gui, Add, Text, gClearLogs x465 y228 w50 h25 Border +Center +0x200, Clear
 
     ; Volume control
-    Gui, Add, Text, x0 y252 w40 h20, Volume:
-    Gui, Add, Slider, vVolumeSlider gAdjustVolume x40 y252 w200 h20 Range0-100 TickInterval10, 50
-    Gui, Add, Text, vVolumeDisplay x245 y252 w30 h20, 50%
+    Gui, Add, Text, x0 y260 w40 h20, Volume:
+    Gui, Add, Slider, vVolumeSlider gAdjustVolume x40 y260 w200 h20 Range0-100 TickInterval10, 50
+    Gui, Add, Text, vVolumeDisplay x245 y260 w30 h20, 50`%
 
     ; Progress bar
-    Gui, Add, Text, x0 y275 w40 h20, Progress:
-    Gui, Add, Slider, vSeekSlider gSeekTrack x40 y275 w475 h20 Range0-100, 0
+    Gui, Add, Text, x0 y285 w40 h20, Progress:
+    Gui, Add, Slider, vSeekSlider gSeekTrack x40 y285 w475 h20 Range0-100, 0
 
     ; Windows Media Player control
-    Gui, Add, ActiveX, x0 y300 w515 h120 vWMP, WMPlayer.OCX
+    Gui, Add, ActiveX, x0 y310 w515 h120 vWMP, WMPlayer.OCX
     player := WMP
-    WMP.uiMode := "none"  ; Hide default controls
+    WMP.uiMode := "none"
     WMP.Enabled := true
     WMP.settings.volume := 50
 
     ; Current track display
-    Gui, Add, Text, vCurrentTrack x2 y425 w511 h20 +Left +0x200, Now playing: (None)
-    Gui, Add, Text, vTimeDisplay x2 y445 w200 h20 +Left, 00:00 / 00:00
-    Gui, Add, Text, vShuffleStatus x300 y445 w100 h20 +Left,
+    Gui, Add, Text, vCurrentTrack x2 y435 w350 h20 +Left +0x200, Now playing: (None)
+    Gui, Add, Text, vTimeDisplay x2 y455 w150 h20 +Left, 00:00 / 00:00
+    Gui, Add, Text, vShuffleStatus x300 y455 w100 h20 +Left,
 
     ; Status bar
     Gui, Add, StatusBar, vStatusBar
-    SB_SetText("Ready - " . playlist.Length() . " tracks loaded")
+    SB_SetText("Ready")
 
     ; Context menu
-    CreateContextMenu()
+    Gosub, CreateContextMenu
+
+    ; Get GUI handle
+    Gui, +LastFound +HwndMyGuiHwnd
 
     Log("DEBUG", "GUI created successfully")
-}
+return
 
-CreateContextMenu() {
+CreateContextMenu:
     Menu, TrackMenu, Add, ▶ Play Track, OnPlay
     Menu, TrackMenu, Add
     Menu, TrackMenu, Add, 🔄 Convert to MP3, OnConvertToMP3
@@ -150,13 +146,13 @@ CreateContextMenu() {
     Menu, TrackMenu, Add, 🗑 Delete File, OnDeleteFile
     Menu, TrackMenu, Add
     Menu, TrackMenu, Add, ℹ Track Info, OnTrackInfo
-}
+return
 
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 ; PLAYLIST MANAGEMENT
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 
-LoadPlaylist() {
+LoadPlaylist:
     playlist := []
 
     ; Load audio files from directory
@@ -169,21 +165,19 @@ LoadPlaylist() {
     }
 
     ; Sort playlist
-    SortPlaylist()
+    Gosub, SortPlaylist
 
     ; Refresh display
-    RefreshListView()
+    Gosub, RefreshListView
 
     ; Update status
     SB_SetText("Loaded " . playlist.Length() . " audio files")
     Log("INFO", "Playlist loaded: " . playlist.Length() . " files")
-}
+return
 
-SortPlaylist() {
+SortPlaylist:
     ; Simple alphabetical sort by filename
-    ; You can enhance this to sort by different criteria
     if (playlist.Length() > 1) {
-        ; Bubble sort for simplicity
         Loop, % playlist.Length() - 1 {
             outerLoop := A_Index
             Loop, % playlist.Length() - outerLoop {
@@ -198,9 +192,9 @@ SortPlaylist() {
             }
         }
     }
-}
+return
 
-RefreshListView() {
+RefreshListView:
     Gui, ListView, TrackList
     LV_Delete()
 
@@ -218,7 +212,7 @@ RefreshListView() {
             duration := GetDuration(path)
 
             row := LV_Add("", name, sizeMB, bitrate, ext, duration)
-            LV_Modify(row, "Col6", path)  ; Hidden column with full path
+            LV_Modify(row, "Col6", path)
         }
     }
 
@@ -226,10 +220,10 @@ RefreshListView() {
     LV_ModifyCol()
 
     ; Highlight current track
-    HighlightCurrentTrack()
-}
+    Gosub, HighlightCurrentTrack
+return
 
-HighlightCurrentTrack() {
+HighlightCurrentTrack:
     ; Reset all rows
     Loop, % LV_GetCount()
         LV_Modify(A_Index, "")
@@ -237,22 +231,19 @@ HighlightCurrentTrack() {
     ; Highlight current track
     if (currentIndex > 0 && currentIndex <= LV_GetCount())
         LV_Modify(currentIndex, "cBlue")
-}
+return
 
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 ; PLAYBACK CONTROL
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 
-PlayCurrent(filePath := "") {
-    global
-
-    if (filePath = "") {
-        if (currentIndex < 1 || currentIndex > playlist.Length()) {
-            Log("ERROR", "Invalid currentIndex: " . currentIndex)
-            return
-        }
-        filePath := playlist[currentIndex]
+PlayCurrent:
+    if (currentIndex < 1 || currentIndex > playlist.Length()) {
+        Log("ERROR", "Invalid currentIndex: " . currentIndex)
+        return
     }
+
+    filePath := playlist[currentIndex]
 
     if !FileExist(filePath) {
         MsgBox, 16, Error, File not found:`n%filePath%
@@ -272,109 +263,118 @@ PlayCurrent(filePath := "") {
     isPaused := false
 
     ; Update button text
-    GuiControl,, PlayPause, ⏸ Pause
+    GuiControl,, PlayPauseBtn, ⏸ Pause
 
     ; Highlight in list
-    HighlightCurrentTrack()
+    Gosub, HighlightCurrentTrack
 
     ; Update status
     SB_SetText("Playing: " . CurrentTrack)
 
     Log("INFO", "Playing: " . filePath)
-}
+return
 
-PlayPause() {
-    global
-
-    if (player.playState = 3) {  ; Playing
+PlayPause:
+    if (player.playState = 3) {
         player.controls.pause()
         isPaused := true
         isPlaying := false
-        GuiControl,, PlayPause, ▶ Play
+        GuiControl,, PlayPauseBtn, ▶ Play
         SB_SetText("Paused: " . CurrentTrack)
         Log("INFO", "Playback paused")
-    } else {  ; Paused or stopped
+    } else {
         if (isPaused) {
             player.controls.play()
         } else {
-            PlayCurrent()
+            if (playlist.Length() > 0) {
+                if (currentIndex < 1 || currentIndex > playlist.Length())
+                    currentIndex := 1
+                Gosub, PlayCurrent
+            }
         }
         isPaused := false
         isPlaying := true
-        GuiControl,, PlayPause, ⏸ Pause
+        GuiControl,, PlayPauseBtn, ⏸ Pause
         SB_SetText("Playing: " . CurrentTrack)
         Log("INFO", "Playback resumed/started")
     }
-}
+return
 
-StopTrack() {
-    global
-
+StopTrack:
     player.controls.stop()
     isPlaying := false
     isPaused := false
 
-    GuiControl,, PlayPause, ▶ Play
+    GuiControl,, PlayPauseBtn, ▶ Play
     GuiControl,, CurrentTrack, Stopped
     GuiControl,, TimeDisplay, 00:00 / 00:00
     GuiControl,, SeekSlider, 0
 
     SB_SetText("Stopped")
     Log("INFO", "Playback stopped")
-}
+return
 
-NextTrack() {
-    global
+NextTrack:
+    if (playlist.Length() = 0)
+        return
 
-    if (playlist.Length() = 0) return
+    if (isShuffleMode) {
+        Random, currentIndex, 1, % playlist.Length()
+    } else {
+        currentIndex++
+        if (currentIndex > playlist.Length())
+            currentIndex := 1
+    }
 
-    currentIndex++
-    if (currentIndex > playlist.Length())
-        currentIndex := 1
-
-    PlayCurrent()
-
-    ; Update ListView selection
-    Gui, ListView, TrackList
-    Loop, % LV_GetCount()
-        LV_Modify(A_Index, "-Select")
-    LV_Modify(currentIndex, "Select Focus")
-}
-
-PrevTrack() {
-    global
-
-    if (playlist.Length() = 0) return
-
-    currentIndex--
-    if (currentIndex < 1)
-        currentIndex := playlist.Length()
-
-    PlayCurrent()
+    Gosub, PlayCurrent
 
     ; Update ListView selection
     Gui, ListView, TrackList
     Loop, % LV_GetCount()
         LV_Modify(A_Index, "-Select")
     LV_Modify(currentIndex, "Select Focus")
-}
+return
 
-Shuffle() {
-    global
+PrevTrack:
+    if (playlist.Length() = 0)
+        return
 
-    if (playlist.Length() <= 1) return
+    if (isShuffleMode) {
+        Random, currentIndex, 1, % playlist.Length()
+    } else {
+        currentIndex--
+        if (currentIndex < 1)
+            currentIndex := playlist.Length()
+    }
 
-    ; Simple shuffle - pick random track
-    Random, newIndex, 1, % playlist.Length()
-    currentIndex := newIndex
-    PlayCurrent()
+    Gosub, PlayCurrent
 
-    GuiControl,, ShuffleStatus, 🔀 Shuffled
+    ; Update ListView selection
+    Gui, ListView, TrackList
+    Loop, % LV_GetCount()
+        LV_Modify(A_Index, "-Select")
+    LV_Modify(currentIndex, "Select Focus")
+return
+
+ShuffleMode:
+    isShuffleMode := !isShuffleMode
+
+    if (isShuffleMode) {
+        GuiControl,, ShuffleBtn, 🔀 ON
+        GuiControl,, ShuffleStatus, Shuffle: ON
+        Log("INFO", "Shuffle mode enabled")
+    } else {
+        GuiControl,, ShuffleBtn, 🔀 Shuffle
+        GuiControl,, ShuffleStatus, Shuffle: OFF
+        Log("INFO", "Shuffle mode disabled")
+    }
+
     SetTimer, ClearShuffleStatus, 2000
-}
+return
 
 ClearShuffleStatus:
-    GuiControl,, ShuffleStatus,
+    if (!isShuffleMode)
+        GuiControl,, ShuffleStatus,
     SetTimer, ClearShuffleStatus, Off
 return
 
@@ -383,8 +383,6 @@ return
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 
 GetBitrate(file) {
-    global player
-
     try {
         media := player.newMedia(file)
         bitrate := media.getItemInfo("Bitrate")
@@ -395,8 +393,6 @@ GetBitrate(file) {
 }
 
 GetDuration(file) {
-    global player
-
     try {
         media := player.newMedia(file)
         duration := media.duration
@@ -417,10 +413,10 @@ FormatTime(seconds) {
     return Format("{:02d}:{:02d}", minutes, seconds)
 }
 
-EnsureDirExists() {
+EnsureDirExists:
     if !FileExist(audioDir)
         FileCreateDir, %audioDir%
-}
+return
 
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 ; EVENT HANDLERS
@@ -430,10 +426,10 @@ TrackClicked:
     if (A_GuiEvent = "DoubleClick") {
         row := A_EventInfo
         if (row > 0) {
-            LV_GetText(filePath, row, 6)  ; Get full path from hidden column
+            LV_GetText(filePath, row, 6)
             if FileExist(filePath) {
                 currentIndex := row
-                PlayCurrent(filePath)
+                Gosub, PlayCurrent
             }
         }
     }
@@ -450,8 +446,8 @@ TrackClicked:
         IniWrite, %sortCol%, %MusicIniFile%, Sort, Column
         IniWrite, %sortDir%, %MusicIniFile%, Sort, Direction
 
-        ; Apply sort (simplified)
-        LoadPlaylist()
+        ; Apply sort
+        Gosub, LoadPlaylist
     }
 return
 
@@ -493,9 +489,16 @@ UpdateTrackInfo:
 
             ; Check if track ended
             if (pos >= dur - 1) {
-                NextTrack()
+                SetTimer, CheckTrackEnd, 1000
             }
         }
+    }
+return
+
+CheckTrackEnd:
+    if (player.playState = 1) {  ; Stopped state
+        SetTimer, CheckTrackEnd, Off
+        Gosub, NextTrack
     }
 return
 
@@ -513,7 +516,7 @@ GuiDropFiles:
             Log("INFO", "File added: " . newPath)
         }
     }
-    LoadPlaylist()
+    Gosub, LoadPlaylist
 return
 
 ViewLogs:
@@ -545,7 +548,7 @@ OnPlay:
     if (row) {
         LV_GetText(filePath, row, 6)
         currentIndex := row
-        PlayCurrent(filePath)
+        Gosub, PlayCurrent
     }
 return
 
@@ -555,7 +558,7 @@ OnConvertToMP3:
     if (row) {
         LV_GetText(filePath, row, 6)
         if FileExist(filePath)
-            ConvertToMP3(filePath)
+            Gosub, ConvertToMP3
     }
 return
 
@@ -590,7 +593,7 @@ OnRenameFile:
             newPath := dir . "\" . newName . "." . ext
             FileMove, %filePath%, %newPath%
             if !ErrorLevel {
-                LoadPlaylist()
+                Gosub, LoadPlaylist
                 Log("INFO", "File renamed: " . filePath . " -> " . newPath)
             }
         }
@@ -607,7 +610,7 @@ OnDeleteFile:
         IfMsgBox Yes
         {
             FileRecycle, %filePath%
-            LoadPlaylist()
+            Gosub, LoadPlaylist
             Log("INFO", "File deleted: " . filePath)
         }
     }
@@ -638,12 +641,18 @@ return
 ; CONVERSION FUNCTIONS
 ; ═══════════════════════════════════════════════════════════════════════════════════════
 
-ConvertToMP3(filePath) {
+ConvertToMP3:
     if !FileExist(ffmpeg) {
         MsgBox, 16, Error, ffmpeg.exe not found in /tools folder.
         return
     }
 
+    ; Get the selected file path
+    Gui, ListView, TrackList
+    row := LV_GetNext()
+    if (!row) return
+
+    LV_GetText(filePath, row, 6)
     SplitPath, filePath, name, dir, ext, name_no_ext
 
     ; Check if already MP3
@@ -671,7 +680,7 @@ ConvertToMP3(filePath) {
 
     if FileExist(outputFile) {
         SB_SetText("Conversion successful!")
-        LoadPlaylist()  ; Refresh to show new file
+        Gosub, LoadPlaylist
         Log("INFO", "Converted: " . filePath . " -> " . outputFile)
     } else {
         SB_SetText("Conversion failed!")
@@ -679,7 +688,7 @@ ConvertToMP3(filePath) {
     }
 
     SetTimer, ClearStatus, 3000
-}
+return
 
 ClearStatus:
     SB_SetText("Ready")
@@ -701,7 +710,6 @@ Log(level, msg) {
         logEntry := "[" . timestamp . "] [" . level . "] " . msg . "`n"
         FileAppend, %logEntry%, %MusicLogFile%
     } catch e {
-        ; Fallback - show in status bar
         SB_SetText("Log error: " . e.message)
     }
 
