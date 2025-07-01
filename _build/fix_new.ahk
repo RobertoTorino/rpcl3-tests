@@ -1,82 +1,7 @@
-AudioCapture:
-
-; Prompt the user to confirm audio device setup
-MsgBox, 52, Warning, Did you already set the audio devices in RPCS3 (CABLE Input/Output)?
-IfMsgBox No
-{
-    ; Kill RPCS3 and exit
-    Process, Close, rpcs3.exe
-    MsgBox, 48, Info, RPCS3 was closed because it must use the correct audio devices.
-    return
-}
-; If user clicks Yes, continue recording setup
-
-if !ProcessExist("rpcs3.exe") {
-    CustomTrayTip("Cannot Record, RPCS3 is not running.", 1)
-    return
-}
-
-    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "CABLE Input" 1, , Hide
-    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "CABLE Output" 1, , Hide
-
-    CustomTrayTip("Audio output set to CABLE Input, audio input set to CABLE Output.", 1)
-    Sleep, 1500
-
-    if !recording
-    {
-        FormatTime, ts,, yyyy-MM-dd_HH-mm-ss
-        FileCreateDir, %A_ScriptDir%\rpcl3_recordings
-        outFile := A_ScriptDir "\rpcl3_recordings\rpcs3_audio_" ts ".wav"
-        audioDevice := "CABLE Output (VB-Audio Virtual Cable)"
-
-        ffArgs := "-f dshow -i audio=""" audioDevice """ -acodec pcm_s16le -ar 48000 -ac 2 """ outFile """"
-        Run, % ffmpegExe " " ffArgs, , , ffmpegPID
-
-    if ffmpegPID {
-        recording := true
-        GuiControl, +cFFCC66, AudioCapture
-    } else {
-        MsgBox, 48, Error, Could not start FFmpeg.
-        return
-    }
-}
-else
-{
-    if ffmpegPID
-        Process, Close, %ffmpegPID%
-        ControlSend,, q, ahk_pid %ffmpegPID%.
-
-    recording := false
-    GuiControl, +c808080, AudioCapture
-    CustomTrayTip("Recording Stopped, Saved to: " . outFile, 1)
-    RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "Speakers" 1, , Hide
-    CustomTrayTip("Audio output set to default", 1)
-
-    ; Get bitrate
-    ; Get file size (in bytes)
-    FileGetSize, fileSizeBytes, %outFile%
-
-    ; Use FFmpeg to get duration
-    ffmpegOutput := A_ScriptDir . "\ffmpeg_output.txt"
-    RunWait, %ComSpec% /c ""%ffmpegExe%" -i "%outFile%" 2> "%ffmpegOutput%"", , Hide
-
-    ; Read duration from FFmpeg output
-    FileRead, ffOut, %ffmpegOutput%
-    RegExMatch(ffOut, "Duration: (\d+):(\d+):(\d+)", d)
-    if (d1 != "" && d2 != "" && d3 != "") {
-        totalSeconds := d1 * 3600 + d2 * 60 + d3
-        bitrate := Round((fileSizeBytes * 8) / (totalSeconds * 1000)) . " kbps"
-    } else {
-        bitrate := "Unknown"
-    }
-
-    ; Optional: delete temporary ffmpeg output file
-    FileDelete, %ffmpegOutput%
-
-    Run, %FileCreateDir%
-}
-return
-
+Verbeterde versie van je SetAudio functie:
+ahk
+; Voeg dit toe aan het begin van je script
+audioPrepared := false
 
 SetAudio:
 if !FileExist(nircmd) {
@@ -85,18 +10,87 @@ if !FileExist(nircmd) {
 }
 
 if (!audioPrepared) {
-    ; Prepare for recording
+    ; Prepare for recording - wacht even tussen commando's
     RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "CABLE Input" 1, , Hide
+    Sleep, 200
     RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "CABLE Output" 2, , Hide
-    ShowCustomMsgBox("Ready", "Recording devices set.`nLaunch RPCS3 and hit record.", 500, 300)
+    Sleep, 200
+
+    ; Check of RPCS3 draait en waarschuw gebruiker
+    if ProcessExist("rpcs3.exe") {
+        MsgBox, 68, Audio Switch, Audio devices set to CABLE.`n`nRPCS3 is running. You may need to restart RPCS3 or change audio settings manually in RPCS3 for it to detect the new devices.`n`nDo you want to continue?
+        IfMsgBox No
+        {
+            ; Revert audio settings
+            RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "Speakers" 1, , Hide
+            Sleep, 200
+            RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "Microphone" 2, , Hide
+            return
+        }
+    }
+
+    ShowCustomMsgBox("Ready", "Recording devices set.`nOutput: CABLE Input`nInput: CABLE Output", 500, 300)
     Log("INFO", "Audio devices switched: Output = CABLE Input, Input = CABLE Output")
     audioPrepared := true
+
 } else {
     ; Revert to default
     RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "Speakers" 1, , Hide
+    Sleep, 200
     RunWait, %ComSpec% /c nircmd.exe setdefaultsounddevice "Microphone" 2, , Hide
-    CustomTrayTip("Audio output/input set to default.", 1)
-    Log("INFO", "Audio devices reverted to default.")
+    Sleep, 200
+
+    CustomTrayTip("Audio devices reverted to default.", 1)
+    Log("INFO", "Audio devices reverted to default: Output = Speakers, Input = Microphone")
     audioPrepared := false
 }
 return
+Voor RPCS3 audio device detectie:
+Je hebt een paar opties:
+
+Optie 1: Restart RPCS3 automatisch
+ahk
+SetAudioWithRestart:
+if ProcessExist("rpcs3.exe") {
+    MsgBox, 68, Restart Required, RPCS3 needs to restart to detect new audio devices.`n`nRestart RPCS3 now?
+    IfMsgBox Yes
+    {
+        Process, Close, rpcs3.exe
+        ; Wacht tot proces volledig afgesloten is
+        while ProcessExist("rpcs3.exe") {
+            Sleep, 100
+        }
+        Sleep, 1000
+
+        ; Verander audio devices
+        Gosub, SetAudio
+
+        ; Start RPCS3 opnieuw (pas het pad aan naar jouw RPCS3 locatie)
+        Run, "C:\Path\To\Your\rpcs3.exe"
+    }
+} else {
+    Gosub, SetAudio
+}
+return
+Optie 2: Verstuur een Windows audio device change notification
+ahk
+; Voeg dit toe na het wisselen van audio devices
+DllCall("winmm.dll\waveOutMessage", "UInt", -1, "UInt", 0x3CD, "UPtr", 0, "UPtr", 0)
+Extra verbeteringen:
+Voeg error checking toe:
+ahk
+; Check of de audio devices bestaan voordat je ze instelt
+RunWait, %ComSpec% /c nircmd.exe win show class Shell_TrayWnd, , Hide
+if ErrorLevel {
+    MsgBox, 48, Warning, Could not access audio devices. Make sure CABLE is installed.
+    return
+}
+Voeg een helper functie toe om te checken welke audio device actief is:
+ahk
+CheckCurrentAudioDevice() {
+    RunWait, %ComSpec% /c nircmd.exe savefile "temp_audio.txt" getdefaultsounddevice, , Hide
+    FileRead, currentDevice, temp_audio.txt
+    FileDelete, temp_audio.txt
+    return currentDevice
+}
+Het belangrijkste probleem is dat audioPrepared niet geïnitialiseerd wordt. Zorg ervoor dat je audioPrepared := false toevoegt aan het begin van je script, dan zou de toggle-functionaliteit correct moeten werken.
