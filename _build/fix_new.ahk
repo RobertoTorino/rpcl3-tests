@@ -7,7 +7,11 @@ ShowMusicPlayer:
 return
 
 MusicPlayer_Init() {
-    global
+    global MusicPlayer_playlist, MusicPlayer_currentIndex, MusicPlayer_audioDir, MusicPlayer_playlistFile
+    global MusicPlayer_sortCol, MusicPlayer_sortDir, MusicPlayer_TestTrack, MusicPlayer_CurrentTrack
+    global MusicPlayer_CurrentTrackName, MusicPlayer_LastMetaFile, MusicPlayer_ffmpeg, MusicPlayer_iniFile
+    global MusicPlayer_player, MusicPlayer_WMP, MusicPlayerHwnd
+
     MusicPlayer_playlist := []
     MusicPlayer_currentIndex := 1
     MusicPlayer_audioDir := A_ScriptDir . "\rpcl3_recordings"
@@ -33,7 +37,10 @@ MusicPlayer_Init() {
 }
 
 MusicPlayer_CreateGUI() {
-    global
+    global MusicPlayer_playlist, MusicPlayer_currentIndex, MusicPlayer_audioDir, MusicPlayer_playlistFile
+    global MusicPlayer_sortCol, MusicPlayer_sortDir, MusicPlayer_TestTrack, MusicPlayer_CurrentTrack
+    global MusicPlayer_CurrentTrackName, MusicPlayer_LastMetaFile, MusicPlayer_ffmpeg, MusicPlayer_iniFile
+    global MusicPlayer_player, MusicPlayer_WMP, MusicPlayerHwnd
 
     Gui, MusicPlayer:New, +AlwaysOnTop +LabelMusicPlayer_ +HwndMusicPlayerHwnd +Resize
     Gui, MusicPlayer:Font, s10 q5, Segoe UI
@@ -83,7 +90,8 @@ MusicPlayer_CreateGUI() {
 }
 
 MusicPlayer_LoadPlaylist() {
-    global
+    global MusicPlayer_playlist, MusicPlayer_audioDir
+
     MusicPlayer_playlist := []
 
     Loop, Files, %MusicPlayer_audioDir%\*.*, R
@@ -98,7 +106,8 @@ MusicPlayer_LoadPlaylist() {
 }
 
 MusicPlayer_RefreshListView() {
-    global
+    global MusicPlayer_playlist, MusicPlayer_currentIndex
+
     Gui, MusicPlayer:ListView, MusicPlayer_TrackList
     LV_Delete()
 
@@ -121,7 +130,8 @@ MusicPlayer_RefreshListView() {
 }
 
 MusicPlayer_GetBitrate(file) {
-    global
+    global MusicPlayer_player
+
     try {
         media := MusicPlayer_player.newMedia(file)
         return media.getItemInfo("Bitrate") . " kbps"
@@ -131,7 +141,7 @@ MusicPlayer_GetBitrate(file) {
 }
 
 MusicPlayer_PlayCurrent(filePath := "") {
-    global
+    global MusicPlayer_playlist, MusicPlayer_currentIndex, MusicPlayer_CurrentTrack, MusicPlayer_player
 
     if (filePath != "") {
         if !FileExist(filePath) {
@@ -167,7 +177,8 @@ MusicPlayer_GetFileName(path) {
 }
 
 MusicPlayer_ConvertToMP3(filePath) {
-    global
+    global MusicPlayer_ffmpeg
+
     SplitPath, filePath, name, dir, ext, name_no_ext
 
     StringLower, extLower, ext
@@ -219,19 +230,18 @@ MusicPlayer_ConvertToMP3(filePath) {
 }
 
 MusicPlayer_ConfirmFileExists(file) {
-    global
     static choice := ""
     choice := ""
 
-    Gui, MusicPlayerConfirm:New, +AlwaysOnTop +Owner +ToolWindow, Confirm Action
+    Gui, MusicPlayerConfirm:New, +AlwaysOnTop +Owner +ToolWindow +LabelMusicPlayerConfirm_, Confirm Action
     Gui, MusicPlayerConfirm:Font, s10 cRed q5
     Gui, MusicPlayerConfirm:Add, Text,, MP3 already exists:
     Gui, MusicPlayerConfirm:Font, s10 q5
     SplitPath, file, nameOnly
     Gui, MusicPlayerConfirm:Add, Text,, %nameOnly%
-    Gui, MusicPlayerConfirm:Add, Button, gMusicPlayer_Override w100 Default, Override
-    Gui, MusicPlayerConfirm:Add, Button, gMusicPlayer_AppendCopy w100, Append Copy
-    Gui, MusicPlayerConfirm:Add, Button, gMusicPlayer_Skip w100, Skip
+    Gui, MusicPlayerConfirm:Add, Button, gMusicPlayerConfirm_Override w100 Default, Override
+    Gui, MusicPlayerConfirm:Add, Button, gMusicPlayerConfirm_AppendCopy w100, Append Copy
+    Gui, MusicPlayerConfirm:Add, Button, gMusicPlayerConfirm_Skip w100, Skip
     Gui, MusicPlayerConfirm:Show,, File Exists
 
     Loop {
@@ -260,7 +270,8 @@ MusicPlayer_GuiContextMenu:
 return
 
 MusicPlayer_TrackClicked:
-    global
+    global MusicPlayer_sortCol, MusicPlayer_sortDir, MusicPlayer_currentIndex
+
     if (A_GuiEvent = "ColClick") {
         if (A_EventInfo = MusicPlayer_sortCol)
             MusicPlayer_sortDir := (MusicPlayer_sortDir = "Asc") ? "Desc" : "Asc"
@@ -291,7 +302,8 @@ MusicPlayer_TrackClicked:
 return
 
 MusicPlayer_PlayPause:
-    global
+    global MusicPlayer_player
+
     if (MusicPlayer_player.playState = 2)
         MusicPlayer_player.controls.play()
     else if (MusicPlayer_player.playState = 3)
@@ -301,12 +313,14 @@ MusicPlayer_PlayPause:
 return
 
 MusicPlayer_StopTrack:
-    global
+    global MusicPlayer_player
+
     MusicPlayer_player.controls.stop()
 return
 
 MusicPlayer_NextTrack:
-    global
+    global MusicPlayer_currentIndex, MusicPlayer_playlist, MusicPlayerHwnd
+
     MusicPlayer_currentIndex++
     if (MusicPlayer_currentIndex > MusicPlayer_playlist.Length())
         MusicPlayer_currentIndex := 1
@@ -322,7 +336,8 @@ MusicPlayer_NextTrack:
 return
 
 MusicPlayer_UpdateTrackInfo:
-    global
+    global MusicPlayer_player
+
     Gui, MusicPlayer:Default
     if (MusicPlayer_player.currentMedia) {
         pos := Round(MusicPlayer_player.controls.currentPosition)
@@ -338,7 +353,6 @@ MusicPlayer_FormatTime(seconds) {
 
 ; Context Menu Handlers
 MusicPlayer_OnConvertToMP3:
-    global
     Gui, MusicPlayer:ListView, MusicPlayer_TrackList
     row := LV_GetNext()
     if (row) {
@@ -353,7 +367,6 @@ MusicPlayer_OnConvertToMP3:
 return
 
 MusicPlayer_OnShowInExplorer:
-    global
     Gui, MusicPlayer:ListView, MusicPlayer_TrackList
     row := LV_GetNext()
     if (row) {
@@ -363,7 +376,6 @@ MusicPlayer_OnShowInExplorer:
 return
 
 MusicPlayer_OnCopyPath:
-    global
     Gui, MusicPlayer:ListView, MusicPlayer_TrackList
     row := LV_GetNext()
     if (row) {
@@ -374,7 +386,8 @@ MusicPlayer_OnCopyPath:
 return
 
 MusicPlayer_OnRenameFile:
-    global
+    global MusicPlayerHwnd
+
     Gui, MusicPlayer:ListView, MusicPlayer_TrackList
     row := LV_GetNext()
     if (row) {
@@ -402,7 +415,6 @@ MusicPlayer_OnRenameFile:
 return
 
 MusicPlayer_OnDeleteFile:
-    global
     Gui, MusicPlayer:ListView, MusicPlayer_TrackList
     row := LV_GetNext()
     if (row) {
@@ -428,20 +440,25 @@ MusicPlayer_OnDeleteFile:
 return
 
 ; Confirm dialog button handlers
-MusicPlayer_Override:
+MusicPlayerConfirm_Override:
     choice := "override"
 return
 
-MusicPlayer_AppendCopy:
+MusicPlayerConfirm_AppendCopy:
     choice := "append"
 return
 
-MusicPlayer_Skip:
+MusicPlayerConfirm_Skip:
+    choice := "skip"
+return
+
+MusicPlayerConfirm_GuiClose:
     choice := "skip"
 return
 
 MusicPlayer_GuiDropFiles:
-    global
+    global MusicPlayer_playlist
+
     Loop, Parse, A_GuiEvent, `n
     {
         file := A_LoopField
