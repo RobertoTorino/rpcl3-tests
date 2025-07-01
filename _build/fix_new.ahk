@@ -1,8 +1,3 @@
-With this logic below to find a game in the database, I have to construct the correct runcommand to write to the inifile:
-IniWrite, %runCommand%, %A_ScriptDir%\rpcl3.ini, RUN_GAME, RunCommand
-The endresult should look like this example: RunCommand=rpcs3.exe --no-gui --fullscreen "games/Ridge Racer 7 [BLUS30001]/PS3_GAME/USRDIR/EBOOT.BIN"
-This path, which is different for every game, is always in the Eboot column in the database, rpcs3.exe is always in the script directory.
-The code so far:
 RunGame:
     global iniFile, rpcs3Exe
 
@@ -28,7 +23,6 @@ RunGame:
     arrayExists := (G_GameIds_MaxIndex != "") ? "Yes" : "No"
 
     ; Show debug info about arrays
-    ;MsgBox, 0, Array Debug, Selected Row: %selectedRow%`nG_GameIds MaxIndex: %G_GameIds_MaxIndex%`nG_GameTitles MaxIndex: %G_GameTitles_MaxIndex%`nG_EbootPaths MaxIndex: %G_EbootPaths_MaxIndex%`nArrays Exist: %arrayExists%
     Log("DEBUG"
         , "Selected Row: " . selectedRow
         . "`nG_GameIds MaxIndex: " . G_GameIds_MaxIndex
@@ -38,16 +32,14 @@ RunGame:
 
     ; Check if arrays exist and have data
     if (G_GameIds_MaxIndex = "" || G_GameIds_MaxIndex < selectedRow) {
-    ;MsgBox, 16, No Data, Arrays not populated or insufficient data.`nSelected Row: %selectedRow%`nArray Size: %G_GameIds_MaxIndex%`n`nPlease perform a search first to populate the data.
-    Log("DEBUG"
-        , "Selected Row: " . selectedRow
-        . "`nG_GameIds MaxIndex: " . G_GameIds_MaxIndex
-        . "`nG_GameTitles MaxIndex: " . G_GameTitles_MaxIndex
-        . "`nG_EbootPaths MaxIndex: " . G_EbootPaths_MaxIndex
-        . "`nArrays Exist: " . arrayExists
-        . "`nPlease perform a search first to populate the data.")
-
-    return
+        Log("DEBUG"
+            , "Selected Row: " . selectedRow
+            . "`nG_GameIds MaxIndex: " . G_GameIds_MaxIndex
+            . "`nG_GameTitles MaxIndex: " . G_GameTitles_MaxIndex
+            . "`nG_EbootPaths MaxIndex: " . G_EbootPaths_MaxIndex
+            . "`nArrays Exist: " . arrayExists
+            . "`nPlease perform a search first to populate the data.")
+        return
     }
 
     ; Get game info from global arrays
@@ -56,7 +48,6 @@ RunGame:
     ebootPath := G_EbootPaths[selectedRow]
 
     ; Debug what we retrieved
-    ;MsgBox, 0, Debug Retrieved, Row: %selectedRow%`nArray Size: %G_GameIds_MaxIndex%`nGameId: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
     Log("DEBUG"
         , "Retrieved row data:"
         . "`nRow: " . selectedRow
@@ -75,39 +66,53 @@ RunGame:
         return
     }
 
+    ; **NEW CODE: Construct the runCommand**
+    ; Build the full path to rpcs3.exe (assuming it's in script directory)
+    rpcs3FullPath := A_ScriptDir . "\" . rpcs3Exe
+
+    ; Construct the runCommand in the format: rpcs3.exe --no-gui --fullscreen "path/to/EBOOT.BIN"
+    runCommand := rpcs3FullPath . " --no-gui --fullscreen " . Chr(34) . ebootPath . Chr(34)
+
+    ; Write the runCommand to INI file
+    IniWrite, %runCommand%, %A_ScriptDir%\rpcl3.ini, RUN_GAME, RunCommand
+
+    Log("DEBUG", "Constructed runCommand: " . runCommand)
+    ; **END NEW CODE**
+
     ; Confirm launch
     MsgBox, 4, Confirm Launch, Launch this game?`n`nGame ID: %gameId%`nTitle: %gameTitle%`nEboot: %ebootPath%
 
     IfMsgBox, Yes
+    {
+        ; Get RunCommand from INI (now it should exist)
+        IniRead, runCommand, %iniFile%, RUN_GAME, RunCommand
+        if (runCommand = "ERROR" or runCommand = "") {
+            MsgBox, 16, Error, Failed to read RunCommand from INI.
+            return
+        }
+        Log("DEBUG", "Read from INI: " . runCommand)
 
-    ; Get RunCommand from INI
-    IniRead, runCommand, %iniFile%, RUN_GAME, RunCommand
-    if (runCommand = "ERROR" or runCommand = "") {
-        MsgBox, 16, Error, Failed to read RunCommand from INI.
-        return
+        ; Wrap the entire command in quotes for cmd.exe safety
+        fullRunCmd := ComSpec . " /c " . Chr(34) . runCommand . Chr(34)
+
+        Log("DEBUG", "Running command: " . fullRunCmd)
+
+        ; Actually run the command
+        Run, %fullRunCmd%, , , newPID
+
+        ; Check if RPCS3 started
+        Sleep, 2000
+        Process, Exist, %rpcs3Exe%
+        if (!ErrorLevel) {
+            MsgBox, 16, Error, Failed to launch RPCS3:`n%runCommand%
+            Log("ERROR", "RPCS3 failed to launch.")
+            SB_SetText("ERROR: RPCS3 did not launch.", 2)
+            return
+        }
+        if (!muteSound)
+            SoundPlay, %A_ScriptDir%\media\rpcl3_good_morning.wav, 1
+        Log("DEBUG", "Started RPCS3 with command from INI.")
+        SB_SetText("Good Morning! Your Game Started.", 2)
+        UpdateStatusBar("Good Morning! Your Game Started. ", 3)
     }
-    Log("DEBUG", "Read from INI: " . runCommand)
-
-    ; Wrap the entire command in quotes for cmd.exe safety
-    fullRunCmd := ComSpec . " /c " . Chr(34) . runCommand . Chr(34)
-
-    Log("DEBUG", "Running command: " . fullRunCmd)
-
-    ; Actually run the command
-    Run, %fullRunCmd%, , , newPID
-
-    ; Check if RPCS3 started
-    Sleep, 2000
-    Process, Exist, %rpcs3Exe%
-    if (!ErrorLevel) {
-        MsgBox, 16, Error, Failed to launch RPCS3:`n%runCommand%
-        Log("ERROR", "RPCS3 failed to launch.")
-        SB_SetText("ERROR: RPCS3 did not launch.", 2)
-        return
-    }
-    if (!muteSound)
-    SoundPlay, %A_ScriptDir%\media\rpcl3_good_morning.wav, 1
-    Log("DEBUG", "Started RPCS3 with command from INI.")
-    SB_SetText("Good Morning! Your Game Started.", 2)
-    UpdateStatusBar("Good Morning! Your Game Started. ", 3)
 return
