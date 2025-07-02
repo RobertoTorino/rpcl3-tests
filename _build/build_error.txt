@@ -1,52 +1,72 @@
-cmd.exe /c run_build.cmd
-Compiling AHK...
-Current directory: C:\repos\rpcl3\_build
-Path verification:
-- Script: rpcl3.ahk (exists: True)
-- Ahk2Exe: C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe (exists: True)
-- Icon: rpcl3_media\rpcl3.ico (exists: True)
-- Base: C:\Program Files\AutoHotkey\Compiler\AutoHotkeySC_Custom.bin (exists: True)
-- Output will be: rpcs3-pcl.exe
-Full command:
-"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in rpcl3.ahk /out rpcs3-pcl.exe /icon rpcl3_media\rpcl3.ico /base "C:\Program Files\AutoHotkey\Compiler\AutoHotkeySC_Custom.bin" /compress 1
-Executing...
-Successfully compiled as:
-"C:\repos\rpcl3\_build\rpcs3-pcl.exe"
-Process exit code: 0
-�o. Compilation successful!
-Embedding WAV files...
-Embedding resources with Resource Hacker...
-Pre-embedding checks:
-- Resource Hacker exists: True
-- Base executable exists: True
-- RC file exists: True
-RC file contents:
-  RCDATA RPCL3_GOOD_MORNING "rpcl3_media\rpcl3_good_morning.wav"
-  RCDATA RPCL3_GAME_OVER "rpcl3_media\rpcl3_game_over.wav"
-Resource Hacker command:
-"C:\Program Files (x86)\Resource Hacker\ResourceHacker.exe" -open rpcs3-pcl.exe -save rpcl3_20250702_19.exe -action addoverwrite -res add_sound.rc -log build.log
-Executing Resource Hacker...
-Exception during Resource Hacker execution: This command cannot be run due to the error: The requested operation requires elevation.
-�?O Resource Hacker failed to create output file!
-Files in current directory:
-  rpcs3-pcl.exe
-Attempting fallback: copying base exe...
-�o. Fallback copy successful (no embedded resources)
-Creating ZIP: rpcl3_20250702_19.zip
+# === ZIP CONTENTS ===
+Write-Host "📦 Creating ZIP: $zipName"
 
+# Build file list more carefully
+$allFiles = @()
 
-    Directory: C:\repos\rpcl3\_build
+# Add the main executable
+if (Test-Path $finalExe) {
+    $allFiles += $finalExe
+    Write-Host "Added: $finalExe"
+} else {
+    Write-Host "Warning: $finalExe not found!" -ForegroundColor Yellow
+}
 
+# Add extra assets (check each one)
+foreach ($asset in $extraAssets) {
+    if (Test-Path $asset) {
+        $allFiles += $asset
+        Write-Host "Added: $asset"
+    } else {
+        Write-Host "Warning: $asset not found!" -ForegroundColor Yellow
+    }
+}
 
-Mode                 LastWriteTime         Length Name                                                                 
-----                 -------------         ------ ----                                                                 
-d-----          7/2/2025   7:42 PM                rpcl3_captures                                                       
-Compress-Archive : Cannot validate argument on parameter 'Path'. The argument is null or empty. Provide an argument 
-that is not null or empty, and then try the command again.
-At C:\repos\rpcl3\_build\build.ps1:190 char:24
-+ Compress-Archive -Path $allFiles -DestinationPath $zipName -Force
-+                        ~~~~~~~~~
-    + CategoryInfo          : InvalidData: (:) [Compress-Archive], ParameterBindingValidationException
-    + FullyQualifiedErrorId : ParameterArgumentValidationError,Compress-Archive
- 
-Done: rpcl3_20250702_19.exe + rpcl3_20250702_19.zip
+# Add media folder files
+if (Test-Path $mediaFolder) {
+    $mediaFiles = Get-ChildItem -Path $mediaFolder -File | ForEach-Object { $_.FullName }
+    if ($mediaFiles) {
+        $allFiles += $mediaFiles
+        Write-Host "Added $($mediaFiles.Count) files from $mediaFolder"
+    }
+} else {
+    Write-Host "Warning: $mediaFolder not found!" -ForegroundColor Yellow
+}
+
+# Add tools folder files
+if (Test-Path $toolsFolder) {
+    $toolsFiles = Get-ChildItem -Path $toolsFolder -Recurse | Where-Object { !$_.PSIsContainer } | ForEach-Object { $_.FullName }
+    if ($toolsFiles) {
+        $allFiles += $toolsFiles
+        Write-Host "Added $($toolsFiles.Count) files from $toolsFolder"
+    }
+} else {
+    Write-Host "Warning: $toolsFolder not found!" -ForegroundColor Yellow
+}
+
+# Add placeholder files for empty folders
+foreach ($folder in $emptyFolders) {
+    if (-not (Test-Path $folder)) {
+        New-Item -ItemType Directory -Path $folder -Force | Out-Null
+    }
+    $placeholderPath = "$folder\.placeholder"
+    New-Item -Path $placeholderPath -ItemType File -Force | Out-Null
+    $allFiles += $placeholderPath
+    Write-Host "Added placeholder: $placeholderPath"
+}
+
+# Remove any null/empty entries
+$allFiles = $allFiles | Where-Object { $_ -and (Test-Path $_) }
+
+Write-Host "Total files to zip: $($allFiles.Count)"
+
+if ($allFiles.Count -gt 0) {
+    try {
+        Compress-Archive -Path $allFiles -DestinationPath $zipName -Force
+        Write-Host "✅ ZIP created successfully: $zipName" -ForegroundColor Green
+    } catch {
+        Write-Host "❌ ZIP creation failed: $($_.Exception.Message)" -ForegroundColor Red
+    }
+} else {
+    Write-Host "❌ No files to zip!" -ForegroundColor Red
+}
