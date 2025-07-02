@@ -1,0 +1,82 @@
+# === CONFIG ===
+$scriptName     = "rpcl3.ahk"
+$baseExeName    = "rpcs3-pcl"
+$finalExeName   = "rpcl3"
+$wavFiles       = @("rpcl3_media\rpcl3_good_morning.wav", "rpcl3_media\rpcl3_game_over.wav")
+$ahk2exePath    = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
+$resHackerPath  = "C:\Program Files (x86)\Resource Hacker\ResourceHacker.exe"
+$iconPath       = "rpcl3_media\rpcl3.ico"
+$mediaFolder    = "rpcl3_media"
+$toolsFolder    = "rpcl3_tools"
+$emptyFolders   = @("rpcl3_recordings", "rpcl3_screenshots", "rpcl3_icons", "rpcl3_captures")
+$versionDat     = "version.dat"
+$versionTxt     = "version.txt"
+$versionTpl     = "version_template.txt"
+$sqliteDll      = "sqlite3.dll"
+$extraAssets    = @("README.txt", "rpcl3.ini", "LICENSE", "games.db", $sqliteDll, $versionTxt, $versionDat)
+
+# === TIMESTAMP ===
+$timestamp    = Get-Date -Format "yyyyMMdd_HH"
+$finalExe     = "$finalExeName`_$timestamp.exe"
+$zipName      = "$finalExeName`_$timestamp.zip"
+
+# === PRE-BUILD CHECKS ===
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+if (-not (Test-Path $scriptName)) { Write-Error "Missing $scriptName"; exit 1 }
+foreach ($wav in $wavFiles) {
+    if (-not (Test-Path $wav)) { Write-Error "Missing $wav"; exit 1 }
+}
+if (-not (Test-Path $iconPath)) { Write-Error "Missing $iconPath"; exit 1 }
+
+# === VERSIONING ===
+Copy-Item $versionTpl $versionTxt -Force
+(Get-Content $versionTxt) -replace '%%DATETIME%%', $timestamp | Set-Content $versionTxt
+$timestamp | Set-Content $versionDat
+
+# === CLEANUP OLD FILES ===
+Remove-Item "$baseExeName.exe","$finalExe","build.log","add_sound.rc","$zipName" -ErrorAction SilentlyContinue
+
+# === COMPILE SCRIPT ===
+Write-Host "Compiling AHK..."
+$baseFile = "$($ahk2exePath.Replace('Ahk2Exe.exe', 'AutoHotkeySC.bin'))"
+& $ahk2exePath /in $scriptName /out "$baseExeName.exe" /icon $iconPath /base $baseFile /compress 1
+if (-not (Test-Path "$baseExeName.exe")) {
+    Write-Error "Compilation failed."
+    exit 1
+}
+
+# === CREATE RC FILE FOR MULTIPLE WAVs ===
+Write-Host "🎵 Embedding WAV files..."
+$rcLines = @()
+foreach ($wav in $wavFiles) {
+    $resName = [System.IO.Path]::GetFileNameWithoutExtension($wav).ToUpper()  # e.g. RPC..._GOOD_MORNING
+    $rcLines += "RCDATA $resName `"$wav`""
+}
+$rcLines | Set-Content "add_sound.rc"
+
+# === EMBED RESOURCES ===
+& $resHackerPath -open "$baseExeName.exe" -save "$finalExe" -action addoverwrite -res "add_sound.rc" -log build.log
+if (-not (Test-Path "$finalExe")) {
+    Write-Error "Resource Hacker failed."
+    exit 1
+}
+Remove-Item "add_sound.rc", "build.log" -ErrorAction SilentlyContinue
+
+# === ZIP CONTENTS ===
+Write-Host "📦 Creating ZIP: $zipName"
+$allFiles = @($finalExe) + $extraAssets
+$allFiles += Get-ChildItem -Path $mediaFolder -File | ForEach-Object { $_.FullName }
+$allFiles += Get-ChildItem -Path $toolsFolder -Recurse | ForEach-Object { $_.FullName }
+
+# Include placeholder in empty folders
+foreach ($folder in $emptyFolders) {
+    if (-not (Test-Path $folder)) { New-Item -ItemType Directory -Path $folder }
+    New-Item -Path "$folder\.placeholder" -ItemType File -Force | Out-Null
+    $allFiles += "$folder\.placeholder"
+}
+
+Compress-Archive -Path $allFiles -DestinationPath $zipName -Force
+
+# === LOG SUCCESS ===
+"[$timestamp] Built $finalExe with embedded WAVs" | Add-Content "changelog.txt"
+Write-Host "Done: $finalExe + $zipName"
