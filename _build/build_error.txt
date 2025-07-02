@@ -1,3 +1,12 @@
 @echo off
 title Building AHK Script
 powershell -NoExit -ExecutionPolicy Bypass -Command "& '%~dp0your_script.ps1'"
+
+
+cmd.exe /c start_build.cmd
+At C:\repos\rpcl3\_build\build.ps1:90 char:54
++ $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
++                                                      ~~
+The string is missing the terminator: ".
+    + CategoryInfo          : ParserError: (:) [], ParseException
+    + FullyQualifiedErrorId : TerminatorExpectedAtEndOfString
