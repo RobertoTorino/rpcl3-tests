@@ -1,42 +1,7 @@
-# === COMPILE SCRIPT ===
-Write-Host "Compiling AHK..."
-
-$baseFile = "$($ahk2exePath.Replace('Ahk2Exe.exe', 'AutoHotkeySC_Custom.bin'))"
-
-# Show current working directory
-Write-Host "Current directory: $(Get-Location)"
-
-# Verify all paths
-Write-Host "Path verification:" -ForegroundColor Yellow
-Write-Host "- Script: $scriptName (exists: $(Test-Path $scriptName))"
-Write-Host "- Ahk2Exe: $ahk2exePath (exists: $(Test-Path $ahk2exePath))"
-Write-Host "- Icon: $iconPath (exists: $(Test-Path $iconPath))"
-Write-Host "- Base: $baseFile (exists: $(Test-Path $baseFile))"
-Write-Host "- Output will be: $baseExeName.exe"
-
-# Build the argument list with proper quoting
-$arguments = @(
-    "/in", $scriptName,
-    "/out", "$baseExeName.exe",
-    "/icon", $iconPath,
-    "/base", "`"$baseFile`"",  # Quote the base file path!
-    "/compress", "1"
-)
-
-Write-Host "Full command:" -ForegroundColor Cyan
-Write-Host "`"$ahk2exePath`" $($arguments -join ' ')"
-
-# Execute with detailed error capture
-Write-Host "Executing..." -ForegroundColor Green
-$process = Start-Process -FilePath $ahk2exePath -ArgumentList $arguments -Wait -PassThru -NoNewWindow
-
-Write-Host "Process exit code: $($process.ExitCode)"
-
-# Check if output file was created
-if (Test-Path "$baseExeName.exe") {
-    Write-Host "✅ Compilation successful!" -ForegroundColor Green
-} else {
-    Write-Host "❌ Output file not created!" -ForegroundColor Red
-    Write-Error "Compilation failed."
-    exit 1
-}
+Embedding WAV files...
+C:\repos\rpcl3\_build\build.ps1 : Resource Hacker failed.
+At line:1 char:1
++ & 'C:\repos\rpcl3\_build\build.ps1'
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,build.ps1
