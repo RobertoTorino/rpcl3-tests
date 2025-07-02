@@ -1,4 +1,69 @@
-Compiling AHK...
-C:\repos\rpcl3\_build\build.ps1 : Compilation failed.
-    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
-    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,build.ps1
+# === COMPILE SCRIPT ===
+Write-Host "Compiling AHK..."
+
+$baseFile = "$($ahk2exePath.Replace('Ahk2Exe.exe', 'AutoHotkeySC_Custom.bin'))"
+
+# Show current working directory
+Write-Host "Current directory: $(Get-Location)"
+
+# Verify all paths
+Write-Host "Path verification:" -ForegroundColor Yellow
+Write-Host "- Script: $scriptName (exists: $(Test-Path $scriptName))"
+Write-Host "- Ahk2Exe: $ahk2exePath (exists: $(Test-Path $ahk2exePath))"
+Write-Host "- Icon: $iconPath (exists: $(Test-Path $iconPath))"
+Write-Host "- Base: $baseFile (exists: $(Test-Path $baseFile))"
+Write-Host "- Output will be: $baseExeName.exe"
+
+# Build the argument list explicitly
+$arguments = @(
+    "/in", $scriptName,
+    "/out", "$baseExeName.exe",
+    "/icon", $iconPath,
+    "/base", $baseFile,
+    "/compress", "1"
+)
+
+Write-Host "Full command:" -ForegroundColor Cyan
+Write-Host "`"$ahk2exePath`" $($arguments -join ' ')"
+
+# Execute with detailed error capture
+Write-Host "Executing..." -ForegroundColor Green
+try {
+    $process = Start-Process -FilePath $ahk2exePath -ArgumentList $arguments -Wait -PassThru -NoNewWindow -RedirectStandardOutput "compile_out.txt" -RedirectStandardError "compile_err.txt"
+    Write-Host "Process exit code: $($process.ExitCode)"
+
+    # Show output if any
+    if (Test-Path "compile_out.txt") {
+        $stdout = Get-Content "compile_out.txt" -Raw
+        if ($stdout.Trim()) {
+            Write-Host "STDOUT:" -ForegroundColor Green
+            Write-Host $stdout
+        }
+    }
+
+    if (Test-Path "compile_err.txt") {
+        $stderr = Get-Content "compile_err.txt" -Raw
+        if ($stderr.Trim()) {
+            Write-Host "STDERR:" -ForegroundColor Red
+            Write-Host $stderr
+        }
+    }
+
+} catch {
+    Write-Host "Exception during compilation: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+# Check if output file was created
+if (Test-Path "$baseExeName.exe") {
+    Write-Host "✅ Compilation successful!" -ForegroundColor Green
+    # Clean up temp files
+    Remove-Item "compile_out.txt", "compile_err.txt" -ErrorAction SilentlyContinue
+} else {
+    Write-Host "❌ Output file not created!" -ForegroundColor Red
+    Write-Host "Files in current directory:" -ForegroundColor Yellow
+    Get-ChildItem -Filter "*.exe" | ForEach-Object { Write-Host "  $($_.Name)" }
+
+    # Don't clean up temp files so we can examine them
+    Write-Error "Compilation failed."
+    exit 1
+}
