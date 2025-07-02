@@ -1,7 +1,67 @@
-Embedding WAV files...
-C:\repos\rpcl3\_build\build.ps1 : Resource Hacker failed.
-At line:1 char:1
-+ & 'C:\repos\rpcl3\_build\build.ps1'
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
-    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,build.ps1
+# === EMBED RESOURCES ===
+Write-Host "Embedding resources with Resource Hacker..."
+
+# Check if files exist
+Write-Host "Pre-embedding checks:" -ForegroundColor Yellow
+Write-Host "- Resource Hacker exists: $(Test-Path $resHackerPath)"
+Write-Host "- Base executable exists: $(Test-Path "$baseExeName.exe")"
+Write-Host "- RC file exists: $(Test-Path "add_sound.rc")"
+
+# Show the RC file contents
+if (Test-Path "add_sound.rc") {
+    Write-Host "RC file contents:" -ForegroundColor Cyan
+    Get-Content "add_sound.rc" | ForEach-Object { Write-Host "  $_" }
+}
+
+# Show the exact Resource Hacker command
+$rhCommand = @(
+    "-open", "$baseExeName.exe",
+    "-save", "$finalExe",
+    "-action", "addoverwrite",
+    "-res", "add_sound.rc",
+    "-log", "build.log"
+)
+
+Write-Host "Resource Hacker command:" -ForegroundColor Cyan
+Write-Host "`"$resHackerPath`" $($rhCommand -join ' ')"
+
+# Execute Resource Hacker with error capture
+Write-Host "Executing Resource Hacker..." -ForegroundColor Green
+try {
+    $process = Start-Process -FilePath $resHackerPath -ArgumentList $rhCommand -Wait -PassThru -NoNewWindow
+    Write-Host "Resource Hacker exit code: $($process.ExitCode)"
+} catch {
+    Write-Host "Exception during Resource Hacker execution: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+# Check the log file for details
+if (Test-Path "build.log") {
+    Write-Host "Resource Hacker log:" -ForegroundColor Yellow
+    Get-Content "build.log" | ForEach-Object { Write-Host "  $_" }
+}
+
+# Check if output file was created
+if (-not (Test-Path "$finalExe")) {
+    Write-Host "❌ Resource Hacker failed to create output file!" -ForegroundColor Red
+
+    # List what files we have
+    Write-Host "Files in current directory:" -ForegroundColor Yellow
+    Get-ChildItem -Filter "*.exe" | ForEach-Object { Write-Host "  $($_.Name)" }
+
+    # Try a simpler approach - just copy the base exe
+    Write-Host "Attempting fallback: copying base exe..." -ForegroundColor Yellow
+    try {
+        Copy-Item "$baseExeName.exe" "$finalExe" -Force
+        Write-Host "✅ Fallback copy successful (no embedded resources)" -ForegroundColor Green
+    } catch {
+        Write-Error "Resource Hacker failed and fallback copy also failed."
+        exit 1
+    }
+} else {
+    Write-Host "✅ Resource embedding successful!" -ForegroundColor Green
+}
+
+# Clean up temp files only if successful
+if (Test-Path "$finalExe") {
+    Remove-Item "add_sound.rc", "build.log" -ErrorAction SilentlyContinue
+}
