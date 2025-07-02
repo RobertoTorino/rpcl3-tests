@@ -1,67 +1,52 @@
-# === EMBED RESOURCES ===
-Write-Host "Embedding resources with Resource Hacker..."
+cmd.exe /c run_build.cmd
+Compiling AHK...
+Current directory: C:\repos\rpcl3\_build
+Path verification:
+- Script: rpcl3.ahk (exists: True)
+- Ahk2Exe: C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe (exists: True)
+- Icon: rpcl3_media\rpcl3.ico (exists: True)
+- Base: C:\Program Files\AutoHotkey\Compiler\AutoHotkeySC_Custom.bin (exists: True)
+- Output will be: rpcs3-pcl.exe
+Full command:
+"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in rpcl3.ahk /out rpcs3-pcl.exe /icon rpcl3_media\rpcl3.ico /base "C:\Program Files\AutoHotkey\Compiler\AutoHotkeySC_Custom.bin" /compress 1
+Executing...
+Successfully compiled as:
+"C:\repos\rpcl3\_build\rpcs3-pcl.exe"
+Process exit code: 0
+�o. Compilation successful!
+Embedding WAV files...
+Embedding resources with Resource Hacker...
+Pre-embedding checks:
+- Resource Hacker exists: True
+- Base executable exists: True
+- RC file exists: True
+RC file contents:
+  RCDATA RPCL3_GOOD_MORNING "rpcl3_media\rpcl3_good_morning.wav"
+  RCDATA RPCL3_GAME_OVER "rpcl3_media\rpcl3_game_over.wav"
+Resource Hacker command:
+"C:\Program Files (x86)\Resource Hacker\ResourceHacker.exe" -open rpcs3-pcl.exe -save rpcl3_20250702_19.exe -action addoverwrite -res add_sound.rc -log build.log
+Executing Resource Hacker...
+Exception during Resource Hacker execution: This command cannot be run due to the error: The requested operation requires elevation.
+�?O Resource Hacker failed to create output file!
+Files in current directory:
+  rpcs3-pcl.exe
+Attempting fallback: copying base exe...
+�o. Fallback copy successful (no embedded resources)
+Creating ZIP: rpcl3_20250702_19.zip
 
-# Check if files exist
-Write-Host "Pre-embedding checks:" -ForegroundColor Yellow
-Write-Host "- Resource Hacker exists: $(Test-Path $resHackerPath)"
-Write-Host "- Base executable exists: $(Test-Path "$baseExeName.exe")"
-Write-Host "- RC file exists: $(Test-Path "add_sound.rc")"
 
-# Show the RC file contents
-if (Test-Path "add_sound.rc") {
-    Write-Host "RC file contents:" -ForegroundColor Cyan
-    Get-Content "add_sound.rc" | ForEach-Object { Write-Host "  $_" }
-}
+    Directory: C:\repos\rpcl3\_build
 
-# Show the exact Resource Hacker command
-$rhCommand = @(
-    "-open", "$baseExeName.exe",
-    "-save", "$finalExe",
-    "-action", "addoverwrite",
-    "-res", "add_sound.rc",
-    "-log", "build.log"
-)
 
-Write-Host "Resource Hacker command:" -ForegroundColor Cyan
-Write-Host "`"$resHackerPath`" $($rhCommand -join ' ')"
-
-# Execute Resource Hacker with error capture
-Write-Host "Executing Resource Hacker..." -ForegroundColor Green
-try {
-    $process = Start-Process -FilePath $resHackerPath -ArgumentList $rhCommand -Wait -PassThru -NoNewWindow
-    Write-Host "Resource Hacker exit code: $($process.ExitCode)"
-} catch {
-    Write-Host "Exception during Resource Hacker execution: $($_.Exception.Message)" -ForegroundColor Red
-}
-
-# Check the log file for details
-if (Test-Path "build.log") {
-    Write-Host "Resource Hacker log:" -ForegroundColor Yellow
-    Get-Content "build.log" | ForEach-Object { Write-Host "  $_" }
-}
-
-# Check if output file was created
-if (-not (Test-Path "$finalExe")) {
-    Write-Host "❌ Resource Hacker failed to create output file!" -ForegroundColor Red
-
-    # List what files we have
-    Write-Host "Files in current directory:" -ForegroundColor Yellow
-    Get-ChildItem -Filter "*.exe" | ForEach-Object { Write-Host "  $($_.Name)" }
-
-    # Try a simpler approach - just copy the base exe
-    Write-Host "Attempting fallback: copying base exe..." -ForegroundColor Yellow
-    try {
-        Copy-Item "$baseExeName.exe" "$finalExe" -Force
-        Write-Host "✅ Fallback copy successful (no embedded resources)" -ForegroundColor Green
-    } catch {
-        Write-Error "Resource Hacker failed and fallback copy also failed."
-        exit 1
-    }
-} else {
-    Write-Host "✅ Resource embedding successful!" -ForegroundColor Green
-}
-
-# Clean up temp files only if successful
-if (Test-Path "$finalExe") {
-    Remove-Item "add_sound.rc", "build.log" -ErrorAction SilentlyContinue
-}
+Mode                 LastWriteTime         Length Name                                                                 
+----                 -------------         ------ ----                                                                 
+d-----          7/2/2025   7:42 PM                rpcl3_captures                                                       
+Compress-Archive : Cannot validate argument on parameter 'Path'. The argument is null or empty. Provide an argument 
+that is not null or empty, and then try the command again.
+At C:\repos\rpcl3\_build\build.ps1:190 char:24
++ Compress-Archive -Path $allFiles -DestinationPath $zipName -Force
++                        ~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Compress-Archive], ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationError,Compress-Archive
+ 
+Done: rpcl3_20250702_19.exe + rpcl3_20250702_19.zip
