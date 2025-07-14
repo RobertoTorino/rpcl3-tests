@@ -1,7 +1,3 @@
-I have this powershell build script to build a AHK exe and also to embed some files in the exe with resourcehacker.
-For the AHK compiler I use a custom bin
-The output is a zipfile containing the exe and the assets, a base exe and an exe with the embedded files. However the exe with the embedded files is not working, it is not even recognized as an exe by windows.
-
 # === CONFIG ===
 $scriptName     = "rpcl3pc.ahk"
 $baseExeName    = "rpcl3pc"
@@ -51,7 +47,7 @@ Remove-Item "$baseExeName.exe","$finalExe","build.log","add_media.rc","$zipName"
 Write-Host "Compiling AHK..."
 
 # Custom AHK compiler bin
-$baseFile = "$($ahk2exePath.Replace('Ahk2Exe.exe', 'SC_CustomRPCL3PC.bin'))"
+# $baseFile = "$($ahk2exePath.Replace('Ahk2Exe.exe', 'SC_CustomRPCL3PC.bin'))"
 
 # Show current working directory
 Write-Host "Current directory: $(Get-Location)"
@@ -61,7 +57,7 @@ Write-Host "Path verification:" -ForegroundColor Yellow
 Write-Host "- Script: $scriptName (exists: $(Test-Path $scriptName))"
 Write-Host "- Ahk2Exe: $ahk2exePath (exists: $(Test-Path $ahk2exePath))"
 Write-Host "- Icon: $iconPath (exists: $(Test-Path $iconPath))"
-Write-Host "- Base: $baseFile (exists: $(Test-Path $baseFile))"
+#Write-Host "- Base: $baseFile (exists: $(Test-Path $baseFile))"
 Write-Host "- Output will be: $baseExeName.exe"
 
 # Build the argument list with proper quoting
@@ -69,7 +65,7 @@ $arguments = @(
     "/in", $scriptName,
     "/out", "$baseExeName.exe",
     "/icon", $iconPath,
-    "/base", "`"$baseFile`"",  # Quote the base file path!
+    #   "/base", "`"$baseFile`"",  # Quote the base file path!
     "/compress", "1"
 )
 
@@ -91,46 +87,44 @@ if (Test-Path "$baseExeName.exe") {
     Exit 1
 }
 
-# === CREATE RC FILE FOR MULTIPLE WAVs ===
+
+# === CREATE RC FILE FOR MEDIA FILES ===
 Write-Host "Creating resource script..." -ForegroundColor Cyan
 
-$rcContent = @()
+# Add MEDIA files
+$rcLines = @()
 
 # Add WAV resources
 foreach ($wav in $wavFiles) {
     $wavPath = (Resolve-Path $wav -ErrorAction Stop).Path
-    $escapedPath = $wavPath -replace '\\', '\\'
     $resName = [System.IO.Path]::GetFileNameWithoutExtension($wav).ToUpper()
-    $rcContent += "$resName WAVE `"$escapedPath`""
-    Write-Host "Adding WAV resource: $resName from $escapedPath"
+    $rcLines += "$resName WAVE `"$wavPath`""
 }
 
-# === ADD PNG FILE ===
-if ($pngFile.Count -gt 0 -and (Test-Path $pngFile[0])) {
-    $pngFullPath = (Resolve-Path $pngFile[0]).Path
-    $escapedPngPath = $pngFullPath -replace '\\', '\\'
-    $resPngName = [System.IO.Path]::GetFileNameWithoutExtension($pngFile[0]).ToUpper()
-    $rcContent += "$resPngName PNG `"$escapedPngPath`""
-    Write-Host "Adding PNG resource: $resPngName from $escapedPngPath"
-} else {
-    Write-Host "Warning: PNG file not found! Skipping embedding." -ForegroundColor Yellow
+# Add PNG resources
+foreach ($png in $pngFile) {
+    if (Test-Path $png) {
+        $pngPath = (Resolve-Path $png).Path
+        $resName = [System.IO.Path]::GetFileNameWithoutExtension($png).ToUpper()
+        $rcLines += "$resName PNG `"$pngPath`""
+    }
 }
 
-if (-not (Test-Path $pngFile)) {
-    Write-Host "Warning: PNG file not found! Skipping embedding." -ForegroundColor Yellow
-}
+# Filter out any accidental empty lines
+$rcLines = $rcLines | Where-Object { $_.Trim().Length -gt 0 }
 
-# Create RC file with UTF-8 encoding (important!)
-$rcContent | Out-File "add_media.rc" -Encoding UTF8
+# Optionally, add a LANGUAGE line at the top (not mandatory)
+$rcLines = @('LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL') + $rcLines
 
+# Join with literal newlines, NO trailing blank line, ASCII encoding
+[System.IO.File]::WriteAllText("add_media.rc", ($rcLines -join "`n"), [System.Text.Encoding]::ASCII)
 
-# ==== TEST ====
+# === Verification (Optional) ===
 Write-Host "=== add_media.rc content ===" -ForegroundColor Cyan
 Get-Content "add_media.rc" | ForEach-Object { Write-Host "  $_" }
 Write-Host "============================"
 
-
-# Verify RC file
+# Test RC file
 if (Test-Path "add_media.rc") {
     Write-Host "RC file created successfully:" -ForegroundColor Green
     Get-Content "add_media.rc" | ForEach-Object { Write-Host "  $_" }
@@ -139,27 +133,19 @@ if (Test-Path "add_media.rc") {
     Exit 1
 }
 
-# === EMBED RESOURCES ===
-Write-Host "Embedding resources..." -ForegroundColor Cyan
 
-# === FIX FOR RESOURCE HACKER ===
-Write-Host "Compiling add_media.rc to add_media.res..." -ForegroundColor Cyan
+# === EMBED RESOURCES DIRECTLY FROM RC ===
+Write-Host "Embedding resources directly from RC with Resource Hacker..." -ForegroundColor Cyan
 
-$rcCompileResult = & rc.exe /fo add_media.res add_media.rc 2>&1
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "rc.exe failed to compile add_media.rc:`n$rcCompileResult"
-    Exit 1
-} else {
-    Write-Host "RC compiled successfully."
-}
+# Always create the RC file as ASCII/ANSI for maximum compatibility
+$rcContent | Out-File "add_media.rc" -Encoding ASCII
 
 # Build Resource Hacker command with proper quoting
 $rhArgs = @(
     "-open", "`"$(Resolve-Path "$baseExeName.exe")`"",
     "-save", "`"$finalExe`"",
     "-action", "addoverwrite",
-    "-resource", "`"$(Resolve-Path "add_media.res")`"",
+    "-resource", "`"$(Resolve-Path "add_media.rc")`"",
     "-log", "`"build.log`""
 )
 
@@ -282,6 +268,7 @@ Write-Host "`n===== BUILD COMPLETE =====" -ForegroundColor Cyan
 Write-Host "Output EXE: $finalExe"
 Write-Host "ZIP Archive: $zipName"
 Write-Host "Timestamp: $timestamp"
+
 
 # === COPY OUTPUT TO NEW_BUILDS FOLDER ===
 try {
