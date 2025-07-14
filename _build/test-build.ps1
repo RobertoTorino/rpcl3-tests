@@ -1,39 +1,24 @@
-ALERT_SOUND WAVE "C:\TestEmbed\alert.wav"
+; AutoHotkey portion to embed assets
+FileInstall, rpcl3_media\RPCL3_GOOD_MORNING.wav, %A_Temp%\RPCL3_GOOD_MORNING.wav
+FileInstall, rpcl3_media\RPCL3_GAME_OVER.wav, %A_Temp%\RPCL3_GAME_OVER.wav
+FileInstall, rpcl3_media\RPCL3_DEFAULT_256.png, %A_Temp%\RPCL3_DEFAULT_256.png
 
-# Adjust paths as needed
-$baseExe    = "C:\TestEmbed\source.exe"
-$outputExe  = "C:\TestEmbed\withsound.exe"
-$wav        = "C:\TestEmbed\alert.wav"
-$resHacker  = "C:\Program Files (x86)\Resource Hacker\ResourceHacker.exe"
-$rcPath     = "C:\TestEmbed\add_media.rc"
-$logPath    = "C:\TestEmbed\build.log"
+; In your code you can now use:
+; %A_Temp%\RPCL3_GOOD_MORNING.wav etc
+MsgBox, WAV will be at: %A_Temp%\RPCL3_GOOD_MORNING.wav
 
-Remove-Item 'C:\TestEmbed\add_media.rc' -ErrorAction SilentlyContinue
-Remove-Item 'C:\TestEmbed\withsound.exe' -ErrorAction SilentlyContinue
-Remove-Item 'C:\TestEmbed\build.log' -ErrorAction SilentlyContinue
 
-Test-Path 'C:\TestEmbed\source.exe'      # Should be True
-Test-Path 'C:\TestEmbed\alert.wav'       # Should be True
 
-# Write RC file (no blank lines)
-[System.IO.File]::WriteAllText(
-        'C:\TestEmbed\add_media.rc',
-        'ALERT_SOUND WAVE "C:\TestEmbed\alert.wav"',
-        [System.Text.Encoding]::ASCII
-)
 
-Get-Content 'C:\TestEmbed\add_media.rc'
-
-# Build Resource Hacker command
-$rhArgs = @(
-    '-open',    "`"$baseExe`"",
-    '-save',    "`"$outputExe`"",
-    '-action',  'addoverwrite',
-    '-resource',"`"$rcPath`"",
-    '-log',     "`"$logPath`""
-)
-
-Write-Host "Running: $resHacker $($rhArgs -join ' ')"
-& $resHacker @rhArgs
-Write-Host "Done. See build.log for details."
-
+# Build FileInstall lines for your .ahk
+$fileInstallLines = @()
+foreach ($wav in $wavFiles) {
+    $assetName = Split-Path $wav -Leaf
+    $fileInstallLines += "FileInstall, $wav, `%A_Temp`%\\$assetName"
+}
+foreach ($png in $pngFile) {
+    $assetName = Split-Path $png -Leaf
+    $fileInstallLines += "FileInstall, $png, `%A_Temp`%\\$assetName"
+}
+Write-Host "`n# Copy-paste these lines to your AHK script:`n"
+$fileInstallLines | ForEach-Object { Write-Host $_ }
