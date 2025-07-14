@@ -12,3 +12,6 @@ Resource: C:\TestEmbed\add_media.rc
 
 Error: Both resource type and resource name must be specified.
 Success!
+
+
+414C45525420574156452022433A5C54657374456D6265645C414C4552542E77617622

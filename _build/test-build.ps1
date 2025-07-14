@@ -24,8 +24,6 @@ Test-Path 'C:\TestEmbed\alert.wav'       # Should be True
 
 Get-Content 'C:\TestEmbed\add_media.rc'
 
-[System.IO.File]::ReadAllBytes('C:\TestEmbed\add_media.rc') | % { "{0:X2}" -f $_ } | -join ' '
-
 # Build Resource Hacker command
 $rhArgs = @(
     '-open',    "`"$baseExe`"",
