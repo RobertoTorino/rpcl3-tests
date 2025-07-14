@@ -1,72 +1,59 @@
-# === ZIP CONTENTS ===
-Write-Host "📦 Creating ZIP: $zipName"
+# === Step 1: Load and auto-increment version ===
+$versionDatPath = "version.dat"
+$versionLine = Get-Content $versionDatPath
 
-# Build file list more carefully
-$allFiles = @()
-
-# Add the main executable
-if (Test-Path $finalExe) {
-    $allFiles += $finalExe
-    Write-Host "Added: $finalExe"
+# Parse format: YYYYMMDD_N
+if ($versionLine -match "^(\d{8})_(\d+)$") {
+    $date = $matches[1]
+    $num = [int]$matches[2] + 1
+    $newVersion = "$date" + "_" + $num.ToString()
 } else {
-    Write-Host "Warning: $finalExe not found!" -ForegroundColor Yellow
+    $date = (Get-Date -Format "yyyyMMdd")
+    $newVersion = "${date}_1"
 }
+Set-Content $versionDatPath $newVersion
+Write-Host "Version updated: $newVersion"
 
-# Add extra assets (check each one)
-foreach ($asset in $extraAssets) {
-    if (Test-Path $asset) {
-        $allFiles += $asset
-        Write-Host "Added: $asset"
-    } else {
-        Write-Host "Warning: $asset not found!" -ForegroundColor Yellow
-    }
-}
+# === Step 2: Create version.txt from template ===
+$versionTemplate = Get-Content "version_template.txt" -Raw
+$datetimeNow = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$gitTag = "v$newVersion"
 
-# Add media folder files
-if (Test-Path $mediaFolder) {
-    $mediaFiles = Get-ChildItem -Path $mediaFolder -File | ForEach-Object { $_.FullName }
-    if ($mediaFiles) {
-        $allFiles += $mediaFiles
-        Write-Host "Added $($mediaFiles.Count) files from $mediaFolder"
-    }
+$versionFinal = $versionTemplate `
+    -replace "%%VERSION%%", $newVersion `
+    -replace "%%DATETIME%%", $datetimeNow `
+    -replace "%%GIT_TAG%%", $gitTag
+
+Set-Content "version.txt" $versionFinal
+Write-Host "Generated version.txt"
+
+# === Step 3: Commit and tag in Git ===
+git add .
+git commit -m "Release $gitTag"
+git tag $gitTag
+git push
+git push origin $gitTag
+Write-Host "Git commit and tag created: $gitTag"
+
+# === Step 4: Create ZIP package ===
+$zipName = "rpcl3-$newVersion.zip"
+Compress-Archive -Path @(
+    "rpcl3.exe",
+    "README.txt",
+    "LICENSE",
+    "games.db",
+    "sqlite3.dll",
+    "rpcl3.ini",
+    "version.txt",
+    "version.dat"
+) -DestinationPath $zipName -Force
+Write-Host "Created $zipName"
+
+# === Step 5: Upload to GitHub (if gh CLI available) ===
+if (Get-Command "gh" -ErrorAction SilentlyContinue) {
+    gh release create $gitTag --title "$gitTag" --notes "Auto release on $datetimeNow" -p
+    gh release upload $gitTag $zipName
+    Write-Host "Uploaded to GitHub Release: $gitTag"
 } else {
-    Write-Host "Warning: $mediaFolder not found!" -ForegroundColor Yellow
-}
-
-# Add tools folder files
-if (Test-Path $toolsFolder) {
-    $toolsFiles = Get-ChildItem -Path $toolsFolder -Recurse | Where-Object { !$_.PSIsContainer } | ForEach-Object { $_.FullName }
-    if ($toolsFiles) {
-        $allFiles += $toolsFiles
-        Write-Host "Added $($toolsFiles.Count) files from $toolsFolder"
-    }
-} else {
-    Write-Host "Warning: $toolsFolder not found!" -ForegroundColor Yellow
-}
-
-# Add placeholder files for empty folders
-foreach ($folder in $emptyFolders) {
-    if (-not (Test-Path $folder)) {
-        New-Item -ItemType Directory -Path $folder -Force | Out-Null
-    }
-    $placeholderPath = "$folder\.placeholder"
-    New-Item -Path $placeholderPath -ItemType File -Force | Out-Null
-    $allFiles += $placeholderPath
-    Write-Host "Added placeholder: $placeholderPath"
-}
-
-# Remove any null/empty entries
-$allFiles = $allFiles | Where-Object { $_ -and (Test-Path $_) }
-
-Write-Host "Total files to zip: $($allFiles.Count)"
-
-if ($allFiles.Count -gt 0) {
-    try {
-        Compress-Archive -Path $allFiles -DestinationPath $zipName -Force
-        Write-Host "✅ ZIP created successfully: $zipName" -ForegroundColor Green
-    } catch {
-        Write-Host "❌ ZIP creation failed: $($_.Exception.Message)" -ForegroundColor Red
-    }
-} else {
-    Write-Host "❌ No files to zip!" -ForegroundColor Red
+    Write-Warning "GitHub CLI (gh) not found. Skipping upload."
 }
