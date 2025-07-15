@@ -5,7 +5,6 @@ $finalExeName   = "rpcl3pc"
 $pngFile        = @("rpcl3_media\RPCL3_DEFAULT_256.png")
 $wavFiles       = @("rpcl3_media\RPCL3_GOOD_MORNING.wav", "rpcl3_media\RPCL3_GAME_OVER.wav")
 $ahk2exePath    = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
-$resHackerPath  = "C:\Program Files (x86)\Resource Hacker\ResourceHacker.exe"
 $mediaFolder    = "rpcl3_media"
 $iconPath       = "rpcl3_media\rpcl3.ico"
 $versionDat     = "version.dat"
@@ -46,9 +45,6 @@ Remove-Item "$baseExeName.exe","$finalExe","build.log","add_media.rc","$zipName"
 # === COMPILE SCRIPT ===
 Write-Host "Compiling AHK..."
 
-# Custom AHK compiler bin
-# $baseFile = "$($ahk2exePath.Replace('Ahk2Exe.exe', 'SC_CustomRPCL3PC.bin'))"
-
 # Show current working directory
 Write-Host "Current directory: $(Get-Location)"
 
@@ -87,118 +83,18 @@ if (Test-Path "$baseExeName.exe") {
     Exit 1
 }
 
-
-# === CREATE RC FILE FOR MEDIA FILES ===
-Write-Host "Creating resource script..." -ForegroundColor Cyan
-
-# Add MEDIA files
-$rcLines = @()
-
-# Add WAV resources
+# Build FileInstall lines for your .ahk
+$fileInstallLines = @()
 foreach ($wav in $wavFiles) {
-    $wavPath = (Resolve-Path $wav -ErrorAction Stop).Path
-    $resName = [System.IO.Path]::GetFileNameWithoutExtension($wav).ToUpper()
-    $rcLines += "$resName WAVE `"$wavPath`""
+    $assetName = Split-Path $wav -Leaf
+    $fileInstallLines += "FileInstall, $wav, `%A_Temp`%\\$assetName"
 }
-
-# Add PNG resources
 foreach ($png in $pngFile) {
-    if (Test-Path $png) {
-        $pngPath = (Resolve-Path $png).Path
-        $resName = [System.IO.Path]::GetFileNameWithoutExtension($png).ToUpper()
-        $rcLines += "$resName PNG `"$pngPath`""
-    }
+    $assetName = Split-Path $png -Leaf
+    $fileInstallLines += "FileInstall, $png, `%A_Temp`%\\$assetName"
 }
-
-# Filter out any accidental empty lines
-$rcLines = $rcLines | Where-Object { $_.Trim().Length -gt 0 }
-
-# Optionally, add a LANGUAGE line at the top (not mandatory)
-$rcLines = @('LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL') + $rcLines
-
-# Join with literal newlines, NO trailing blank line, ASCII encoding
-[System.IO.File]::WriteAllText("add_media.rc", ($rcLines -join "`n"), [System.Text.Encoding]::ASCII)
-
-# === Verification (Optional) ===
-Write-Host "=== add_media.rc content ===" -ForegroundColor Cyan
-Get-Content "add_media.rc" | ForEach-Object { Write-Host "  $_" }
-Write-Host "============================"
-
-# Test RC file
-if (Test-Path "add_media.rc") {
-    Write-Host "RC file created successfully:" -ForegroundColor Green
-    Get-Content "add_media.rc" | ForEach-Object { Write-Host "  $_" }
-} else {
-    Write-Error "Failed to create RC file"
-    Exit 1
-}
-
-
-# === EMBED RESOURCES DIRECTLY FROM RC ===
-Write-Host "Embedding resources directly from RC with Resource Hacker..." -ForegroundColor Cyan
-
-# Always create the RC file as ASCII/ANSI for maximum compatibility
-$rcContent | Out-File "add_media.rc" -Encoding ASCII
-
-# Build Resource Hacker command with proper quoting
-$rhArgs = @(
-    "-open", "`"$(Resolve-Path "$baseExeName.exe")`"",
-    "-save", "`"$finalExe`"",
-    "-action", "addoverwrite",
-    "-resource", "`"$(Resolve-Path "add_media.rc")`"",
-    "-log", "`"build.log`""
-)
-
-Write-Host "Executing Resource Hacker with arguments:" -ForegroundColor Yellow
-Write-Host "`"$resHackerPath`" $($rhArgs -join ' ')"
-
-try {
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $resHackerPath
-    $psi.Arguments = $rhArgs
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-
-    $process = [System.Diagnostics.Process]::Start($psi)
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
-
-    Write-Host "Resource Hacker output:" -ForegroundColor DarkGray
-    Write-Host $stdout
-    Write-Host $stderr
-
-    if ($process.ExitCode -ne 0) {
-        throw "Resource Hacker failed with exit code $($process.ExitCode)"
-    }
-
-    if (-not (Test-Path "$finalExe")) {
-        throw "Output file was not created"
-    }
-
-    Write-Host "Resource embedding successful!" -ForegroundColor Green
-}
-catch {
-    Write-Host "RESOURCE EMBEDDING ERROR: $_" -ForegroundColor Red
-
-    # Check log file if it exists
-    if (Test-Path "build.log") {
-        Write-Host "Resource Hacker log contents:" -ForegroundColor Yellow
-        Get-Content "build.log" | ForEach-Object { Write-Host "  $_" }
-    }
-
-    # Fallback to copying without resources
-    Write-Host "Attempting fallback (copy without resources)..." -ForegroundColor Yellow
-    try {
-        Copy-Item "$baseExeName.exe" "$finalExe" -Force
-        Write-Host "Fallback successful (no embedded resources)" -ForegroundColor Green
-    }
-    catch {
-        Write-Error "Fallback copy failed: $_"
-        Exit 1
-    }
-}
+Write-Host "`n# Copy-paste these lines to your AHK script:`n"
+$fileInstallLines | ForEach-Object { Write-Host $_ }
 
 
 # === ZIP CONTENTS ===
