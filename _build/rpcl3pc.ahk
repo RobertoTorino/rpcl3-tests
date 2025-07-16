@@ -1,8 +1,3 @@
-; YouTube: @game_play267
-; Twitch: RR_357000
-; X:@relliK_2048
-; Discord:
-; RPCL3 Process Control
 #SingleInstance force
 #Persistent
 #NoEnv
