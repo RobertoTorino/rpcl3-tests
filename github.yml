@@ -1,31 +1,177 @@
-name: Build and Release
+  Now I want a solution to use Github for releasing the build
+    
+    assistant logo
+    ChatDPG
+  Absolutely! Here’s a basic, professional AutoHotkey/PowerShell build & GitHub Release workflow:
 
-on:
-  push:
-    tags:
-      - 'v*'      # build/release only on version tags, like v1.2.0
+    A. Manual releases (simple & robust)
+  Push your zipped release output to your GitHub repo:
+    Tag your commit (e.g. v1.2.0) in Git.
+    On GitHub, go to "Releases" → "Draft a new release".
+    Attach your built ZIP (e.g. rpcl3pc_20250717_08.zip) to the release, fill in notes, and publish.
+    This gets you started fast without automation.
+    
+    B. Automated releases using GitHub Actions
+    You want each push (or tag) to produce and attach a release asset.
+    
+    1. Organize your repo
+    Place your build script and all required files in your repository.
+    Configure your build to output to e.g. ./dist/ or similar.
+    2. Add GitHub Actions workflow file
+  Create .github/workflows/release.yml in your repo, like this:
 
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
+    yaml
+  name: Build and Release
 
-      - name: Set up AutoHotkey
-        uses: auto-hotkey/setup-ahk@v1 # or set up PowerShell and ahk2exe as needed
+  on:
+    push:
+      tags:
+        - 'v*'      # build/release only on version tags, like v1.2.0
 
-      - name: Run Build Script
-        run: pwsh ./_build/build.ps1
+  jobs:
+    build:
+      runs-on: windows-latest
+      steps:
+        - uses: actions/checkout@v4
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build
-          path: ./_build/*.zip
+        - name: Set up AutoHotkey
+          uses: auto-hotkey/setup-ahk@v1 # or set up PowerShell and ahk2exe as needed
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ./_build/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        - name: Run Build Script
+          run: pwsh ./_build/build.ps1
+
+        - name: Upload artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: build
+            path: ./_build/*.zip
+
+        - name: Create GitHub Release
+          uses: softprops/action-gh-release@v2
+          with:
+            files: ./_build/*.zip
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  What this does:
+
+    Runs on every push of a tag v*.
+    Checks out your repo.
+    Runs your PowerShell script (build.ps1) which should compile and create the zip in _build/.
+    Uploads the resulting zip as a release asset.
+  If you want to release on every push to main, change the on: section to:
+
+    yaml
+  on:
+    push:
+      branches:
+        - main
+    3. How does this get started?
+    Push your code and build.ps1 to GitHub.
+  Tag a new version:
+    text
+    git tag v1.0.0
+    git push origin v1.0.0
+    Watch Actions tab for workflow progress.
+    When done, you’ll have a GitHub release with the .zip attached!
+  4. Advanced/Extra (Optional):
+    Add steps to install UPX if using manual UPX compression.
+    Add scripts to generate release notes/changelogs.
+    Include version and timestamp in the release or filename for clarity.
+    Summary for your case
+    Prepare your build with your PowerShell as above.
+    Use GitHub Actions workflow YAML as shown.
+    When you want to publish, push and tag—outputs go to Releases!
+    Let me know if you want a tailored workflow YAML (e.g. custom paths, ahk2exe install, etc.) or need a first-time step-by-step for GitHub Actions.
+    
+    You
+    Autohotkey gives an unresolved action/workflow reference and I only want to publish the exe as release on github with a version number.
+    
+    assistant logo
+    ChatDPG
+    Great, let’s make this minimal and robust.
+    You do not need any autohotkey/setup-ahk action at all for a release that just uploads your compiled EXE—because your own build script (which runs under PowerShell) does everything.
+    
+    Here’s exactly what you need for a minimal GitHub Actions workflow that publishes your EXE with a version number tag.
+    
+    1. Trigger on a version tag
+  Edit .github/workflows/release.yml to:
+
+    yaml
+  name: Release EXE
+
+  on:
+    push:
+      tags:
+        - 'v*'       # Triggers on tags like v1.0.0
+
+  jobs:
+    build:
+      runs-on: windows-latest
+      steps:
+        - name: Checkout repo
+          uses: actions/checkout@v4
+
+        - name: Build EXE
+          run: pwsh ./_build/build.ps1
+
+        - name: Publish EXE to GitHub Release
+          uses: softprops/action-gh-release@v2
+          with:
+            files: _build/*.exe
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  2. How to use it:
+    Make sure your build script outputs the EXE (with version in name if desired) to the _build folder (change this path if needed).
+  In your local repo:
+    Commit and push changes
+  Create a tag:
+    text
+    git tag v1.0.0
+    git push origin v1.0.0
+    The workflow runs, builds and uploads the EXE to a new GitHub Release.
+    3. If you want EXE name to include version
+  Grab the version tag in your PowerShell script using the env var GITHUB_REF_NAME:
+    powershell
+    $version = $env:GITHUB_REF_NAME  # e.g. v1.2.3
+    $finalExe = "rpcl3pc_$version.exe"
+    Or you can parse it out if you want just the number.
+  4. You get:
+    A release created on GitHub with your EXE attached,
+    All automatic, no extra Ahk/unresolved action needed.
+    Let me know if you want it for a different folder, or help extracting and passing the tag to your PowerShell!
+    
+    You
+    yes using powershell for the tag, ho to do that?
+    
+    assistant logo
+    ChatDPG
+  Certainly! In a GitHub Actions workflow, you can access the Git tag (like v1.2.3) via the environment variable GITHUB_REF_NAME. In your PowerShell build script, you can grab the tag like this:
+
+    powershell
+    # In your PowerShell build script (e.g. build.ps1), add:
+    $tag = $env:GITHUB_REF_NAME  # This will have value like 'v1.2.3'
+    
+    # If you want to strip the leading 'v' (optional)
+    if ($tag -like 'v*') {
+    $ver = $tag.Substring(1)
+  } else {
+    $ver = $tag
+  }
+
+  # Now use the tag or version in your output file name:
+    $finalExe = "rpcl3pc_${tag}.exe"
+    # or
+    $finalExe = "rpcl3pc_${ver}.exe"
+  So, in summary:
+
+    In your workflow YAML, just run your build script normally.
+    In PowerShell, use $env:GITHUB_REF_NAME to get the tag name.
+    Use that in your filename or versioning logic.
+  Result: Your built EXE will use the tag from the GitHub release as its versioned filename!
+
+  Example:
+
+    If you ‘git tag v2.0.1’ and push, the Action will build an EXE named rpcl3pc_v2.0.1.exe and attach it to the release.
+    
+    Let me know if you want a full script sample!
+
