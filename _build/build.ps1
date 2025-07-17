@@ -12,9 +12,11 @@ $extraAssets    = @("README.txt", "pc.ini", "LICENSE", $versionTxt, $versionDat)
 if ($env:GITHUB_REF_NAME) {
     $tag = $env:GITHUB_REF_NAME
     if ($tag -like 'v*') { $ver = $tag.Substring(1) } else { $ver = $tag }
-    $suffix = "_$tag"
-} else {
-    $suffix = "LocalBuild_" + (Get-Date -Format "yyyyMMdd_HHmmss")  # NO LEADING UNDERSCORE
+    $finalExe = "${finalExeName}_$tag.exe"
+    $zipName  = "${finalExeName}_$tag.zip"
 }
-$finalExe = "$finalExeName$suffix.exe"
-$zipName  = "$finalExeName$suffix.zip"
+else {
+    $localTag = "LocalBuild_" + (Get-Date -Format "yyyyMMdd_HHmmss")  # No leading underscore
+    $finalExe = "${finalExeName}${localTag}.exe"
+    $zipName  = "${finalExeName}${localTag}.zip"
+}
