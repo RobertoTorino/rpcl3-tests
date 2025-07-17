@@ -1,29 +1,21 @@
 "C:/Program Files/PowerShell/7/pwsh.exe" -File C:/repos/rpcl3-process-control/_build/build.ps1
-Compiling AHK...
-Current directory: C:\repos\rpcl3-process-control\_build
-Path verification:
-- Script: rpcl3pc.ahk (exists: True)
-- Ahk2Exe: C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe (exists: True)
-- Icon: rpcl3_media\rpcl3.ico (exists: True)
-- UPX: C:\upx-5.0.1-win64\upx.exe (exists: True)
-- Output will be: rpcl3pc.exe
 Full command:
 "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in rpcl3pc.ahk /out rpcl3pc.exe /icon rpcl3_media\rpcl3.ico /compress 1
 Executing...
 Process exit code: 0
 _ Compilation successful!
 Copied rpcl3pc.exe to rpcl3pc_20250717_08.exe (timestamped build EXE)
-Pre-UPX size: 2054656
-upx: rpcl3pc_20250717_08.exe: CantPackException: file is too small for dos/exe
+Pre-UPX size: 3215360
 Ultimate Packer for eXecutables
 Copyright (C) 1996 - 2025
 UPX 5.0.1       Markus Oberhumer, Laszlo Molnar & John Reiser    May 6th 2025
 
 File size         Ratio      Format      Name
 --------------------   ------   -----------   -----------
+3215360 ->   2058752   64.03%    win64/pe     rpcl3pc_20250717_08.exe
 
-Packed 0 files.
-Post-UPX size: 2054656
+Packed 1 file.
+Post-UPX size: 2058752
 Compressing EXE with UPX...
 Ultimate Packer for eXecutables
 Copyright (C) 1996 - 2025
@@ -31,9 +23,9 @@ UPX 5.0.1       Markus Oberhumer, Laszlo Molnar & John Reiser    May 6th 2025
 
 File size         Ratio      Format      Name
 --------------------   ------   -----------   -----------
-upx: rpcl3pc_20250717_08.exe: CantPackException: file is too small for dos/exe
+upx: rpcl3pc_20250717_08.exe: AlreadyPackedException: already packed by UPX
 
-Packed 0 files.
+Packed 1 file: 0 ok, 1 error.
 UPX compression finished.
 _ Creating ZIP: rpcl3pc_20250717_08.zip
 Added: rpcl3pc_20250717_08.exe
@@ -56,4 +48,4 @@ Copying rpcl3pc_20250717_08.zip to C:\repos\rpcl3-process-control\new_builds
 Copying rpcl3pc.exe to C:\repos\rpcl3-process-control\new_builds
 All available files copied to: C:\repos\rpcl3-process-control\new_builds
 Done: rpcl3pc_20250717_08.exe + rpcl3pc_20250717_08.zip
-Script completed. Press any key to exit...                             
+Script completed. Press any key to exit...
