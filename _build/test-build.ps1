@@ -1,16 +1,59 @@
-Summary of what to try:
-Add this to your script:
+"C:/Program Files/PowerShell/7/pwsh.exe" -File C:/repos/rpcl3-process-control/_build/build.ps1
+Compiling AHK...
+Current directory: C:\repos\rpcl3-process-control\_build
+Path verification:
+- Script: rpcl3pc.ahk (exists: True)
+- Ahk2Exe: C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe (exists: True)
+- Icon: rpcl3_media\rpcl3.ico (exists: True)
+- UPX: C:\upx-5.0.1-win64\upx.exe (exists: True)
+- Output will be: rpcl3pc.exe
+Full command:
+"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in rpcl3pc.ahk /out rpcl3pc.exe /icon rpcl3_media\rpcl3.ico /compress 1
+Executing...
+Process exit code: 0
+_ Compilation successful!
+Copied rpcl3pc.exe to rpcl3pc_20250717_08.exe (timestamped build EXE)
+Pre-UPX size: 2054656
+upx: rpcl3pc_20250717_08.exe: CantPackException: file is too small for dos/exe
+Ultimate Packer for eXecutables
+Copyright (C) 1996 - 2025
+UPX 5.0.1       Markus Oberhumer, Laszlo Molnar & John Reiser    May 6th 2025
 
+File size         Ratio      Format      Name
+--------------------   ------   -----------   -----------
 
-Write-Host "Pre-UPX size:" (Get-Item $finalExe).Length
-$upxResult = & $upxPath --best --lzma $finalExe
-$upxResult | ForEach-Object { Write-Host $_ }
-Write-Host "Post-UPX size:" (Get-Item $finalExe).Length
+Packed 0 files.
+Post-UPX size: 2054656
+Compressing EXE with UPX...
+Ultimate Packer for eXecutables
+Copyright (C) 1996 - 2025
+UPX 5.0.1       Markus Oberhumer, Laszlo Molnar & John Reiser    May 6th 2025
 
-This will show realtime if UPX is running, and show before/after size.
+File size         Ratio      Format      Name
+--------------------   ------   -----------   -----------
+upx: rpcl3pc_20250717_08.exe: CantPackException: file is too small for dos/exe
 
-Try UPX directly in CMD for a clear error:
+Packed 0 files.
+UPX compression finished.
+_ Creating ZIP: rpcl3pc_20250717_08.zip
+Added: rpcl3pc_20250717_08.exe
+Added: README.txt
+Added: pc.ini
+Added: LICENSE
+Added: version.txt
+Added: version.dat
+Added 4 files from rpcl3_media
+Total files to zip: 10
+_ ZIP created successfully: rpcl3pc_20250717_08.zip
+! Fallback EXE created, but MEDIA files were NOT embedded.
 
-"C:\upx-5.0.1-win64\upx.exe" --best --lzma C:\repos\rpcl3-process-control\_build\rpcl3pc_20250716_22.exe
-Review the output:
-but either can't compress further, can't pack this file, or the EXE is recreated afte
+===== BUILD COMPLETE =====
+Output EXE: rpcl3pc_20250717_08.exe
+ZIP Archive: rpcl3pc_20250717_08.zip
+Timestamp: 20250717_08
+Copying rpcl3pc_20250717_08.exe to C:\repos\rpcl3-process-control\new_builds
+Copying rpcl3pc_20250717_08.zip to C:\repos\rpcl3-process-control\new_builds
+Copying rpcl3pc.exe to C:\repos\rpcl3-process-control\new_builds
+All available files copied to: C:\repos\rpcl3-process-control\new_builds
+Done: rpcl3pc_20250717_08.exe + rpcl3pc_20250717_08.zip
+Script completed. Press any key to exit...                             
