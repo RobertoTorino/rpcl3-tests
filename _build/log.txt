@@ -1,17 +1,33 @@
-[14 Jul 2025, 22:01:01]
+; Shows a simple modal message box to the right of the main GUI
+CustomMsgBoxToRight(Text, Title:="Message", Seconds:=3) {
+    global GuiHwnd
+    WinGetPos, gx, gy, gw, gh, ahk_id %GuiHwnd%
+    if (gx = "")  ; Could not get window
+        gx := 0, gy := 0, gw := 400, gh := 200
 
-Current Directory:
-C:\TestEmbed
+    ; Set dimensions
+    w := 300, h := 120
+    ; Place to the right with a margin, vertically aligned
+    mx := gx + gw + 20
+    my := gy + 20
 
-Commandline:
-"C:\Program Files (x86)\Resource Hacker\ResourceHacker.exe" -open "C:\TestEmbed\source.exe" -save "C:\TestEmbed\withsound.exe" -action addoverwrite -resource "C:\TestEmbed\add_media.rc" -log "C:\TestEmbed\build.log"
+    ; Create a unique Gui
+    Gui, +OwnDialogs
+    Gui, MsgBoxGui:New, , %Title%
+    Gui, MsgBoxGui:Add, Text, xm ym w%w% r3, %Text%
+    Gui, MsgBoxGui:Add, Button, gMsgBoxGuiClose Default xm w100, OK
+    Gui, MsgBoxGui:Show, x%mx% y%my% w%w% h%h%, %Title%
 
-Open    : C:\TestEmbed\source.exe
-Save    : C:\TestEmbed\withsound.exe
-Resource: C:\TestEmbed\add_media.rc
+    ; Auto-close after timeout, if given
+    if (Seconds > 0)
+    {
+        SetTimer, MsgBoxGui_Close, -% (Seconds*1000)
+    }
+    Return
 
-Error: Both resource type and resource name must be specified.
-Success!
+    MsgBoxGuiClose:
+    MsgBoxGui_Close:
+        Gui, MsgBoxGui:Destroy
+    Return
+}
 
-
-414C45525420574156452022433A5C54657374456D6265645C414C4552542E77617622
