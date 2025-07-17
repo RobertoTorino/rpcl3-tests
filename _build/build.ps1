@@ -1,17 +1,20 @@
-# Remove or comment out these lines:
-# $timestamp    = Get-Date -Format "yyyyMMdd_HH"
-# $finalExe     = "$finalExeName`_$timestamp.exe"
-# $zipName      = "$finalExeName`_$timestamp.zip"
+$scriptName     = "rpcl3pc.ahk"
+$finalExeName   = "rpcl3pc"
+$ahk2exePath    = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
+$upxPath        = "C:\upx-5.0.1-win64\upx.exe"
+$mediaFolder    = "rpcl3_media"
+$iconPath       = "rpcl3_media\rpcl3.ico"
+$versionDat     = "version.dat"
+$versionTxt     = "version.txt"
+$versionTpl     = "version_template.txt"
+$extraAssets    = @("README.txt", "pc.ini", "LICENSE", $versionTxt, $versionDat)
 
-# Instead, use:
-$timestamp = Get-Date -Format "yyyyMMdd_HH"
 if ($env:GITHUB_REF_NAME) {
     $tag = $env:GITHUB_REF_NAME
     if ($tag -like 'v*') { $ver = $tag.Substring(1) } else { $ver = $tag }
-    $finalExe = "${finalExeName}_$tag.exe"
-    $zipName  = "${finalExeName}_$tag.zip"
+    $suffix = "_$tag"
 } else {
-    $localTag = "LocalBuild_" + (Get-Date -Format "yyyyMMdd_HHmmss")
-    $finalExe = "${finalExeName}_$localTag.exe"
-    $zipName  = "${finalExeName}_$localTag.zip"
+    $suffix = "LocalBuild_" + (Get-Date -Format "yyyyMMdd_HHmmss")  # NO LEADING UNDERSCORE
 }
+$finalExe = "$finalExeName$suffix.exe"
+$zipName  = "$finalExeName$suffix.zip"
