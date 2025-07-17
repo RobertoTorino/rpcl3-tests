@@ -1,4 +1,33 @@
-      - name: Download AutoHotkey v1 Portable
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v1.1.33.11/AutoHotkey_1.1.33.11.zip" -OutFile "ahk-v1.zip"
-          Expand-Archive -Path "ahk-v1.zip" -DestinationPath "ahk"
+Run $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
+Copy-Item: D:\a\rpcl3-process-control\rpcl3-process-control\build\build.ps1:32
+Line |
+  32 |  Copy-Item $versionTpl $versionTxt -Force
+     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot find path 'D:\a\rpcl3-process-control\rpcl3-process-control\version_template.txt' because it does not
+     | exist.
+Get-Content: D:\a\rpcl3-process-control\rpcl3-process-control\build\build.ps1:33
+Line |
+  33 |  (Get-Content $versionTxt) -replace "%%DATETIME%%", $timestamp | Set-C …
+     |   ~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot find path 'D:\a\rpcl3-process-control\rpcl3-process-control\version.txt' because it does not exist.
+Compiling AHK...
+_ Current directory: D:\a\rpcl3-process-control\rpcl3-process-control
+Path verification:
+- Script: rpcl3pc.ahk (exists: False)
+- Ahk2Exe: C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe (exists: False)
+- Icon: rpcl3_media\rpcl3.ico (exists: False)
+- UPX: C:\upx-5.0.1-win64\upx.exe (exists: False)
+- Output will be: rpcl3pc.exe
+Full command:
+"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in rpcl3pc.ahk /out rpcl3pc.exe /icon rpcl3_media\rpcl3.ico
+_ Executing...
+Start-Process: D:\a\rpcl3-process-control\rpcl3-process-control\build\build.ps1:68
+Line |
+  68 |  $process = Start-Process -FilePath $ahk2exePath -ArgumentList $argume …
+     |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | This command cannot be run due to the error: The system cannot find the file specified.
+_ Process exit code:
+_ Output file not created!
+Write-Error: Compilation failed.
+Error: Process completed with exit code 1.
+0s
