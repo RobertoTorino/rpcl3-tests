@@ -1,3 +1,8 @@
+; YouTube: @game_play267
+; Twitch: RR_357000
+; X:@relliK_2048
+; Discord:
+; RPCL3 Process Control
 #SingleInstance force
 #Persistent
 #NoEnv
@@ -63,9 +68,9 @@ if A_Args[1] = "activate" {
 }
 
 ; AutoHotkey portion to embed assets
-FileInstall, rpcl3_media\RPCL3_GOOD_MORNING.wav, %A_Temp%\\RPCL3_GOOD_MORNING.wav
-FileInstall, rpcl3_media\RPCL3_GAME_OVER.wav, %A_Temp%\\RPCL3_GAME_OVER.wav
-FileInstall, rpcl3_media\RPCL3_DEFAULT_256.png, %A_Temp%\\RPCL3_DEFAULT_256.png
+FileInstall, rpcl3_media\RPCL3_GOOD_MORNING.wav, %A_Temp%\RPCL3_GOOD_MORNING.wav
+FileInstall, rpcl3_media\RPCL3_GAME_OVER.wav, %A_Temp%\RPCL3_GAME_OVER.wav
+FileInstall, rpcl3_media\RPCL3_DEFAULT_256.png, %A_Temp%\RPCL3_DEFAULT_256.png
 
 
 ; ─── Sound settings at startup. ───────────────────────────────────────────────────────────────────────────────────────
@@ -91,10 +96,10 @@ Gui, Add, Button, gRunRPCS3             x180 y95 w150 h75, RUN RPCS3
 Gui, Add, Button, gRefreshPath          x340 y95 w150 h75, REFRESH PATH
 Gui, Add, Button, gSetRpcs3Path         x500 y95 w150 h75, SET PATH
 Gui, Add, Button, gToggleMute vMuteBtn  x180 y58 w150 h27 +Center +0x200, % (muteSound ? "UNMUTE" : "MUTE")
-defaultIcon := A_ScriptDir . "%A_Temp%\RPCL3_DEFAULT_256.png"
+defaultIcon := A_Temp . "\RPCL3_DEFAULT_256.png"
 if FileExist(defaultIcon) {
     Gui, Add, Picture, x580 y22 w65 h65 vRPCL3Icon, %defaultIcon%
-    }
+}
 Gui, Add, Text,                         x342 y66, Press the Escape button to quit rpcs3.
 
 ; ─── Custom status bar, 1 is used for RPCS3 status, use 2 and 3. ──────────────────────────────────────────────────────
@@ -121,6 +126,16 @@ SetTimer, UpdatePriority, 3000
 FormatTime, timeStamp, , yyyy-MM-dd HH:mm:ss
 Log("DEBUG", "Writing Timestamp " . timeStamp . " to " . iniFile)
 IniWrite, %timeStamp%, %iniFile%, LAST_UPDATE, LastUpdated
+
+
+; ─── System tray. ────────────────────────────────────────────────────────────
+Menu, Tray, NoStandard                                  ;Remove default items like "Pause Script"
+Menu, Tray, Add, Show GUI, ShowGui                      ;Add a custom "Show GUI" option
+Menu, Tray, Add                                         ;Add a separator line
+Menu, Tray, Add, About RPCL3PC..., ShowAboutDialog
+Menu, Tray, Default, Show GUI                           ;Make "Show GUI" the default double-click action
+Menu, Tray, Tip, RPCS3 Process Control                  ;Tooltip when hovering
+
 
 ; ─── This return ends all updates to the gui. ─────────────────────────────────────────────────────────────────────────
 return
@@ -445,11 +460,11 @@ UpdateCPUMem() {
 
 ; ─── Kill RPCS3 process with escape button function. ──────────────────────────────────────────────────────────────────
 Esc::
-    if (!muteSound) {
-        wav := "%A_Temp%\\RPCL3_GAME_OVER.wav"
-        if FileExist(wav)
-            SoundPlay, %wav%
-    }
+    wav := A_Temp . "\RPCL3_GAME_OVER.wav"
+    if FileExist(wav)
+    SoundPlay, %wav%
+    else
+    MsgBox, WAV not found at: %wav%
 
     Process, Exist, rpcs3.exe
     if (ErrorLevel) {
@@ -579,9 +594,11 @@ RunRPCS3:
     }
 
     if (!muteSound) {
-        wav := "%A_Temp%\\RPCL3_GOOD_MORNING.wav"
-        if FileExist(wav)
-            SoundPlay, %wav%)
+    wav := A_Temp . "\RPCL3_GOOD_MORNING.wav"
+         if FileExist(wav)
+         SoundPlay, %wav%
+         else
+         MsgBox, WAV not found at: %wav%
     }
 
     Log("INFO", "Game Started.")
@@ -589,23 +606,6 @@ RunRPCS3:
     CustomTrayTip("Good Morning! Game Started.", 1)
     UpdateStatusBar("Good Morning! Game Started.", 3)
 Return
-
-
-; ─── Custom msgbox. ───────────────────────────────────────────────────────────────────────────────────────────────────
-ShowCustomMsgBox(title, text, x := "", y := "") {
-    Gui, MsgBoxGui:New, +AlwaysOnTop +ToolWindow, %title%
-    Gui, MsgBoxGui:Add, Text,, %text%
-    Gui, MsgBoxGui:Add, Button, gCloseCustomMsgBox Default, OK
-
-    if (x != "" && y != "")
-        Gui, MsgBoxGui:Show, x%x% y%y% AutoSize
-    else
-        Gui, MsgBoxGui:Show, AutoSize Center
-}
-
-CloseCustomMsgBox:
-    Gui, MsgBoxGui:Destroy
-return
 
 
 ; ─── Raw ini valuer. ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -726,10 +726,46 @@ CustomTrayTip(Text, Icon := 1) {
 }
 
 
+; ─── Show "about" dialog function. ────────────────────────────────────────────────────────────────────
+ShowAboutDialog() {
+    ; Extract embedded version.dat resource to temp file
+    tempFile := A_Temp "\version.dat"
+    hRes := DllCall("FindResource", "Ptr", 0, "VERSION_FILE", "Ptr", 10) ;RT_RCDATA = 10
+    if (hRes) {
+        hData := DllCall("LoadResource", "Ptr", 0, "Ptr", hRes)
+        pData := DllCall("LockResource", "Ptr", hData)
+        size := DllCall("SizeofResource", "Ptr", 0, "Ptr", hRes)
+        if (pData && size) {
+            File := FileOpen(tempFile, "w")
+            if IsObject(File) {
+                File.RawWrite(pData + 0, size)
+                File.Close()
+            }
+        }
+    }
+    ; Read version string
+    FileRead, verContent, %tempFile%
+    version := "Unknown"
+    if (verContent != "") {
+        version := verContent
+    }
+
+aboutText := "RPCS3 Process Control`n"
+           . "Realtime Process Priority Management for RPCS3`n"
+           . "Version: " . version . "`n"
+           . Chr(169) . " " . A_YYYY . " Philip" . "`n"
+           . "YouTube: @game_play267" . "`n"
+           . "Twitch: RR_357000" . "`n"
+           . "X: @relliK_2048" . "`n"
+           . "Discord:"
+
+MsgBox, 64, About RPCL3PC, %aboutText%
+}
+
 ; ─── Show GUI. ────────────────────────────────────────────────────────────────────────────────────────────────────────
 ShowGui:
     Gui, Show
-    SB_SetText("RPCS3 Priority Control Launcher 3 GUI Shown.", 2)
+    SB_SetText("RPCS3 Process Control GUI Shown.", 2)
 return
 
 CreateGui:
