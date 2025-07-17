@@ -1,36 +1,25 @@
-param(
-    [string]$Message = "Automated commit"
-)
+$scriptName     = "rpcl3pc.ahk"
+$baseExeName    = "rpcl3pc"
+$ahk2exePath    = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
+$upxPath        = "C:\upx-5.0.1-win64\upx.exe"
+$mediaFolder    = "rpcl3_media"
+$iconPath       = "rpcl3_media\rpcl3.ico"
+$versionDat     = "version.dat"
+$versionTxt     = "version.txt"
+$versionTpl     = "version_template.txt"
+$extraAssets    = @("README.txt", "pc.ini", "LICENSE", $versionTxt, $versionDat)
 
-git add .
-git commit -m "$Message"
-
-# Find the latest tag like v1.2.3, sorted as version
-$lastTag = git tag --list "v*" | Sort-Object {[version]($_ -replace '^v','')} -Descending | Select-Object -First 1
-
-if ($lastTag -match '^v(\d+)\.(\d+)\.(\d+)$') {
-    $major = [int]$matches[1]
-    $minor = [int]$matches[2]
-    $patch = [int]$matches[3]
-} else {
-    $major = 1; $minor = 0; $patch = 0
-    $lastTag = "v0.0.0"
+if ($env:GITHUB_REF_NAME) {
+    $tag = $env:GITHUB_REF_NAME
+    if ($tag -like 'v*') { $ver = $tag.Substring(1) } else { $ver = $tag }
+    $finalExe = "${baseExeName}_$tag.exe"
+    $zipName  = "${baseExeName}_$tag.zip"
+}
+else {
+    $localTag = "LocalBuild_" + (Get-Date -Format "yyyyMMdd_HHmmss")
+    $finalExe = "${baseExeName}${localTag}.exe"
+    $zipName  = "${baseExeName}${localTag}.zip"
 }
 
-Write-Host "Last tag: $lastTag"
-$choice = Read-Host "Which part would you like to increment? [major/minor/patch] (default patch)"
-
-switch ($choice.ToLower()) {
-    "major" {$major++; $minor=0; $patch=0}
-    "minor" {$minor++; $patch=0}
-    default {$patch++}
-}
-
-$newTag = "v$major.$minor.$patch"
-Write-Host "Creating and pushing tag $newTag..."
-
-git tag $newTag
-git push
-git push origin $newTag
-
-Write-Host "Committed and tagged as $newTag."
+$timestamp    = Get-Date -Format "yyyyMMdd_HH"
+# ^ Only define $timestamp if you need it for logging, not for naming output files
