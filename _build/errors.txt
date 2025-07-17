@@ -1,33 +1,60 @@
-Run $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
-Copy-Item: D:\a\rpcl3-process-control\rpcl3-process-control\build\build.ps1:32
-Line |
-  32 |  Copy-Item $versionTpl $versionTxt -Force
-     |  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     | Cannot find path 'D:\a\rpcl3-process-control\rpcl3-process-control\version_template.txt' because it does not
-     | exist.
-Get-Content: D:\a\rpcl3-process-control\rpcl3-process-control\build\build.ps1:33
-Line |
-  33 |  (Get-Content $versionTxt) -replace "%%DATETIME%%", $timestamp | Set-C …
-     |   ~~~~~~~~~~~~~~~~~~~~~~~
-     | Cannot find path 'D:\a\rpcl3-process-control\rpcl3-process-control\version.txt' because it does not exist.
+cmd.exe /c run_build.cmd
+Copy-Item : Cannot find path 'C:\repos\rpcl3-process-control\version_template.txt' because it does not exist.
+At C:\repos\rpcl3-process-control\build\build.ps1:32 char:1
++ Copy-Item $versionTpl $versionTxt -Force
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\repos\rpcl3-...on_template.txt:String) [Copy-Item], ItemNotFoundExce 
+   ption
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.CopyItemCommand
+ 
+Get-Content : Cannot find path 'C:\repos\rpcl3-process-control\version.txt' because it does not exist.
+At C:\repos\rpcl3-process-control\build\build.ps1:33 char:2
++ (Get-Content $versionTxt) -replace "%%DATETIME%%", $timestamp | Set-C ...
++  ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\repos\rpcl3-...rol\version.txt:String) [Get-Content], ItemNotFoundEx 
+   ception
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand
+ 
 Compiling AHK...
-_ Current directory: D:\a\rpcl3-process-control\rpcl3-process-control
+_ Current directory: C:\repos\rpcl3-process-control\build
 Path verification:
-- Script: rpcl3pc.ahk (exists: False)
-- Ahk2Exe: C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe (exists: False)
-- Icon: rpcl3_media\rpcl3.ico (exists: False)
-- UPX: C:\upx-5.0.1-win64\upx.exe (exists: False)
+- Script: ../rpcl3pc.ahk (exists: False)
+- Ahk2Exe:  (exists: )
+- Icon: ../rpcl3_media\rpcl3.ico (exists: False)
+- UPX:  (exists: )
 - Output will be: rpcl3pc.exe
 Full command:
-"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in rpcl3pc.ahk /out rpcl3pc.exe /icon rpcl3_media\rpcl3.ico
+"" /in ../rpcl3pc.ahk /out rpcl3pc.exe /icon ../rpcl3_media\rpcl3.ico
 _ Executing...
-Start-Process: D:\a\rpcl3-process-control\rpcl3-process-control\build\build.ps1:68
-Line |
-  68 |  $process = Start-Process -FilePath $ahk2exePath -ArgumentList $argume …
-     |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-     | This command cannot be run due to the error: The system cannot find the file specified.
-_ Process exit code:
+_ Process exit code: 
 _ Output file not created!
-Write-Error: Compilation failed.
-Error: Process completed with exit code 1.
-0s
+Test-Path : Cannot bind argument to parameter 'Path' because it is null.
+At C:\repos\rpcl3-process-control\build\build.ps1:50 char:58
++ ... te-Host "- Ahk2Exe: $ahk2exePath (exists: $(Test-Path $ahk2exePath))"
++                                                           ~~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Test-Path], ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.TestPathCom 
+   mand
+ 
+Test-Path : Cannot bind argument to parameter 'Path' because it is null.
+At C:\repos\rpcl3-process-control\build\build.ps1:52 char:50
++ Write-Host "- UPX: $upxPath (exists: $(Test-Path $upxPath))"
++                                                  ~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Test-Path], ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell.Commands.TestPathCom 
+   mand
+ 
+Start-Process : Cannot validate argument on parameter 'FilePath'. The argument is null or empty. Provide an argument 
+that is not null or empty, and then try the command again.
+At C:\repos\rpcl3-process-control\build\build.ps1:68 char:36
++ $process = Start-Process -FilePath $ahk2exePath -ArgumentList $argume ...
++                                    ~~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Start-Process], ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationError,Microsoft.PowerShell.Commands.StartProcessCommand
+ 
+C:\repos\rpcl3-process-control\build\build.ps1 : Compilation failed.
+At line:1 char:1
++ & 'C:\repos\rpcl3-process-control\build\build.ps1'
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,build.ps1
