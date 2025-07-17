@@ -1,0 +1,49 @@
+name: CI Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'    # Will run on git tag push like v1.2.3
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download AutoHotkey v1 Portable
+        run: |
+          Invoke-WebRequest -Uri "https://www.autohotkey.com/download/ahk-v1.zip" -OutFile "ahk-v1.zip"
+          Expand-Archive -Path "ahk-v1.zip" -DestinationPath "ahk"
+
+      - name: Download UPX
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v5.0.1/upx-5.0.1-win64.zip" -OutFile "upx.zip"
+          Expand-Archive -Path "upx.zip" -DestinationPath "upx"
+
+      - name: Add tools to PATH
+        shell: pwsh
+        run: |
+          echo "$PWD\ahk\Compiler" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "$PWD\upx" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Show tools and PowerShell version
+        run: |
+          dir ahk
+          dir upx
+          pwsh -v
+
+      - name: Build EXE and ZIP
+        shell: pwsh
+        run: |
+          $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
+          $env:upxPath = "$PWD\upx\upx.exe"
+          pwsh _build/build.ps1
+
+      - name: Upload EXE to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: _build/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
