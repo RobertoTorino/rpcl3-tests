@@ -1,0 +1,43 @@
+ Advanced/Extra (Optional):
+    Add steps to install UPX if using manual UPX compression.
+    Add scripts to generate release notes/changelogs.
+    Include version and timestamp in the release or filename for clarity.
+
+
+How to use it:
+    Make sure your build script outputs the EXE (with version in name if desired) to the _build folder (change this path if needed).
+In your local repo:
+    Commit and push changes
+Create a tag:
+    git tag v1.0.0
+    git push origin v1.0.0
+    The workflow runs, builds and uploads the EXE to a new GitHub Release.
+If you want EXE name to include version
+Grab the version tag in your PowerShell script using the env var GITHUB_REF_NAME:
+    powershell
+    $version = $env:GITHUB_REF_NAME  # e.g. v1.2.3
+    $finalExe = "rpcl3pc_$version.exe"
+    Or you can parse it out if you want just the number.
+You get:
+    A release created on GitHub with your EXE attached,
+    All automatic, no extra Ahk/unresolved action needed.
+    Let me know if you want it for a different folder, or help extracting and passing the tag to your PowerShell!
+
+    If you ‘git tag v2.0.1’ and push
+    the Action will build an EXE named rpcl3pc_v2.0.1.exe and attach it to the release.
+
+
+    # Get version or environment info
+    if ($env:GITHUB_REF_NAME) {
+    $tag = $env:GITHUB_REF_NAME
+    if ($tag -like 'v*') {
+    $ver = $tag.Substring(1)
+    } else {
+    $ver = $tag
+    }
+    $finalExe = "$finalExeName" + "_" + $tag + ".exe"
+  } else {
+    # Local build: use a readable marker with date/time
+    $localTag = "LocalBuild_" + (Get-Date -Format "yyyyMMdd_HHmmss")
+    $finalExe = "$finalExeName" + "_" + $localTag + ".exe"
+  }
