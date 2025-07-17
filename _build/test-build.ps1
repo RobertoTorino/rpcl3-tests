@@ -16,3 +16,11 @@ if FileExist(wav)
 SoundPlay, %wav%
 else
 MsgBox, WAV not found at: %wav%
+
+
+# Path to UPX (update this if you put it elsewhere)
+$upxPath = "C:\path\to\upx.exe"
+# Compress the timestamped EXE (or $baseExeName.exe, depending on your script)
+Write-Host "Compressing EXE with UPX..."
+& $upxPath --best --lzma $finalExe
+Write-Host "UPX compression finished."
