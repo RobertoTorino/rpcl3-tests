@@ -1,112 +1,13 @@
-name: CI Build and Release
+if (!(Test-Path $output)) {
+  # Try the absolute path based on build logs (as a fallback)
+  $actualOutput = "D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe"
+  if (Test-Path $actualOutput) {
+    Write-Host ":: Output not where we expected, but found at $actualOutput."
+    Copy-Item $actualOutput $output -Force
+  }
+}
 
-on:
-  push:
-    tags:
-      - 'v*'  # Trigger on version tags like v1.0.0
-
-jobs:
-  build:
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up UTF-8 and PowerShell output
-        shell: pwsh
-        run: |
-          $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          Write-Host "Using PowerShell version: $($PSVersionTable.PSVersion)"
-
-      - name: Download AutoHotkey v1 Portable
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v1.1.37.02/AutoHotkey_1.1.37.02.zip" -OutFile "ahk-v1.zip"
-          Expand-Archive -Path "ahk-v1.zip" -DestinationPath "ahk"
-          dir ahk
-
-      - name: Download UPX
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v5.0.1/upx-5.0.1-win64.zip" -OutFile "upx.zip"
-          Expand-Archive -Path "upx.zip" -DestinationPath "upx"
-          dir upx
-
-      - name: Debug - List files
-        run: |
-          dir
-          dir ahk
-          dir ahk\Compiler
-
-            - name: Build EXE and ZIP with inline PowerShell
-              shell: pwsh
-              run: |
-                $ErrorActionPreference = 'Stop'
-                $ahkCompiler = "$PWD\ahk\Compiler\Ahk2Exe.exe"
-                $baseFile    = "$PWD\ahk\Compiler\Unicode 32-bit.bin"
-                $input       = "$PWD\rpcl3pc.ahk"
-                $output      = "$PWD\rpcl3pc.exe"
-                $icon        = "$PWD\rpcl3_media\rpcl3.ico"
-                $zipName     = "$PWD\rpcl3_release.zip"
-
-                $versionTxt  = "$PWD\version.txt"
-                $versionDat  = "$PWD\version.dat"
-                $extraAssets = @(
-                  "$PWD\README.txt",
-                  "$PWD\pc.ini",
-                  "$PWD\LICENSE",
-                  $versionTxt,
-                  $versionDat
-                )
-
-                foreach ($file in @($ahkCompiler, $baseFile, $input)) {
-                  if (!(Test-Path $file)) {
-                    Write-Error "Required file not found: $file"
-                    exit 1
-                  } else {
-                    Write-Host ":: Found: $file"
-                  }
-                }
-
-                # Compile
-                if (!(Test-Path $icon)) {
-                  Write-Warning "Icon file not found — continuing without icon"
-                  & $ahkCompiler /in $input /out $output /base $baseFile
-                } else {
-                  & $ahkCompiler /in $input /out $output /icon $icon /base $baseFile
-                }
-
-                if (!(Test-Path $output)) {
-                  Write-Error ":: Build failed — output file not found."
-                  exit 1
-                }
-                Write-Host ":: Build succeeded — $output created."
-                Write-Host ":: Compressing with UPX..."
-                & "$PWD\upx\upx.exe" --best --lzma $output
-
-                # Collect all existing assets for the zip
-                $toZip = @($output)
-                foreach ($asset in $extraAssets) {
-                  if (Test-Path $asset) {
-                    $toZip += $asset
-                    Write-Host ":: Added to zip: $asset"
-                  } else {
-                    Write-Warning "Not adding (missing): $asset"
-                  }
-                }
-
-                Compress-Archive -Path $toZip -DestinationPath $zipName
-
-      - name: List final artifacts
-        run: dir
-
-      - name: Upload EXE and ZIP to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            rpcl3pc.exe
-            rpcl3_release.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-
+if (!(Test-Path $output)) {
+  Write-Error ":: Build failed — output exe still not found."
+  exit 1
+}
