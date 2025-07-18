@@ -1,22 +1,37 @@
+Annotations
+1 error
+build
+failed 9 minutes ago in 17s
+Search logs
+1s
+4s
+6s
+1s
+1s
+0s
+1s
 Run $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
-The argument 'build/build.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
-
-Usage: pwsh[.exe] [-Login] [[-File] <filePath> [args]]
-                  [-Command { - | <script-block> [-args <arg-array>]
-                                | <string> [<CommandParameters>] } ]
-                  [-CommandWithArgs <string> [<CommandParameters>]
-                  [-ConfigurationName <string>] [-ConfigurationFile <filePath>]
-                  [-CustomPipeName <string>] [-EncodedCommand <Base64EncodedCommand>]
-                  [-ExecutionPolicy <ExecutionPolicy>] [-InputFormat {Text | XML}]
-                  [-Interactive] [-MTA] [-NoExit] [-NoLogo] [-NonInteractive] [-NoProfile]
-                  [-NoProfileLoadTime] [-OutputFormat {Text | XML}] 
-                  [-SettingsFile <filePath>] [-SSHServerMode] [-STA] 
-                  [-Version] [-WindowStyle <style>] 
-                  [-WorkingDirectory <directoryPath>]
-
-       pwsh[.exe] -h | -Help | -? | /?
-
-PowerShell Online Help https://aka.ms/powershell-docs
-
-All parameters are case-insensitive.
+  $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
+  $env:upxPath = "$PWD\upx\upx.exe"
+  pwsh build.ps1
+  shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+Compiling AHK...
+_ Current directory: D:\a\rpcl3-process-control\rpcl3-process-control
+Path verification:
+- Script: rpcl3pc.ahk (exists: True)
+- Ahk2Exe: C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe (exists: False)
+- Icon: rpcl3_media\rpcl3.ico (exists: True)
+- UPX: C:\upx-5.0.1-win64\upx.exe (exists: False)
+- Output will be: rpcl3pc.exe
+Full command:
+"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in rpcl3pc.ahk /out rpcl3pc.exe /icon rpcl3_media\rpcl3.ico
+_ Executing...
+Start-Process: D:\a\rpcl3-process-control\rpcl3-process-control\build.ps1:68
+Line |
+  68 |  $process = Start-Process -FilePath $ahk2exePath -ArgumentList $argume …
+     |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | This command cannot be run due to the error: The system cannot find the file specified.
+_ Process exit code:
+_ Output file not created!
+Write-Error: Compilation failed.
 Error: Process completed with exit code 1.

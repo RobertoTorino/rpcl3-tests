@@ -30,8 +30,8 @@ This is my build script:
 # === CONFIG ===
 $scriptName     = "rpcl3pc.ahk"
 $baseExeName    = "rpcl3pc"
-$ahk2exePath    = "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe"
-$upxPath        = "C:\upx-5.0.1-win64\upx.exe"
+$ahk2exePath    = $env:ahk2exePath
+$upxPath        = $env:upxPath
 $mediaFolder    = "rpcl3_media"
 $iconPath       = "rpcl3_media\rpcl3.ico"
 $versionDat     = "version.dat"
@@ -64,7 +64,7 @@ $timestamp | Set-Content $versionDat
 
 
 # === CLEANUP OLD FILES ===
-Remove-Item "$baseExeName.exe","$finalExe","build.log","$zipName" -ErrorAction SilentlyContinue
+Remove-Item "$baseExeName.exe","$finalExe","$zipName" -ErrorAction SilentlyContinue
 
 
 # === COMPILE SCRIPT ===
