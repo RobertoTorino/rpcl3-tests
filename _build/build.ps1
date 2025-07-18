@@ -1,37 +1,17 @@
-I have everything in the root of the project folder now, but I get this error in GitHub:
-Run $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
-The argument 'build/build.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
-
-Usage: pwsh[.exe] [-Login] [[-File] <filePath> [args]]
-[-Command { - | <script-block> [-args <arg-array>]
-| <string> [<CommandParameters>] } ]
-[-CommandWithArgs <string> [<CommandParameters>]
-[-ConfigurationName <string>] [-ConfigurationFile <filePath>]
-[-CustomPipeName <string>] [-EncodedCommand <Base64EncodedCommand>]
-[-ExecutionPolicy <ExecutionPolicy>] [-InputFormat {Text | XML}]
-[-Interactive] [-MTA] [-NoExit] [-NoLogo] [-NonInteractive] [-NoProfile]
-[-NoProfileLoadTime] [-OutputFormat {Text | XML}]
-[-SettingsFile <filePath>] [-SSHServerMode] [-STA]
-[-Version] [-WindowStyle <style>]
-[-WorkingDirectory <directoryPath>]
-
-pwsh[.exe] -h | -Help | -? | /?
-
-PowerShell Online Help https://aka.ms/powershell-docs
-
-All parameters are case-insensitive.
-Error: Process completed with exit code 1.
-
-
-
-This is my build script:
-
-
 # === CONFIG ===
 $scriptName     = "rpcl3pc.ahk"
 $baseExeName    = "rpcl3pc"
 $ahk2exePath    = $env:ahk2exePath
 $upxPath        = $env:upxPath
+
+if (!$ahk2exePath -or !(Test-Path $ahk2exePath)) {
+    Write-Error "Can't find Ahk2Exe at $ahk2exePath"
+    Exit 1
+}
+if (!$upxPath -or !(Test-Path $upxPath)) {
+    Write-Warning "UPX not found at $upxPath — skipping compression."
+}
+
 $mediaFolder    = "rpcl3_media"
 $iconPath       = "rpcl3_media\rpcl3.ico"
 $versionDat     = "version.dat"
@@ -86,7 +66,6 @@ $arguments = @(
     "/in", $scriptName,
     "/out", "$baseExeName.exe",
     "/icon", $iconPath
-#    "/compress", "1"
 )
 
 Write-Host "Full command:" -ForegroundColor Cyan
@@ -234,47 +213,3 @@ Write-Host "Script completed!" -ForegroundColor Yellow
 
 # Open folder
 Invoke-Item (Get-Item $finalExe).DirectoryName
-
-
-
-
-And this is my release script:
-
-
-
-param(
-[string]$Message = "Automated commit"
-)
-
-git add .
-git commit -m "$Message"
-
-# Find the latest tag like v1.2.3, sorted as version
-$lastTag = git tag --list "v*" | Sort-Object {[version]($_ -replace '^v','')} -Descending | Select-Object -First 1
-
-if ($lastTag -match '^v(\d+)\.(\d+)\.(\d+)$') {
-    $major = [int]$matches[1]
-    $minor = [int]$matches[2]
-    $patch = [int]$matches[3]
-} else {
-    $major = 1; $minor = 0; $patch = 0
-    $lastTag = "v0.0.0"
-}
-
-Write-Host "Last tag: $lastTag"
-$choice = Read-Host "Which part would you like to increment? [major/minor/patch] (default patch)"
-
-switch ($choice.ToLower()) {
-    "major" {$major++; $minor=0; $patch=0}
-    "minor" {$minor++; $patch=0}
-    default {$patch++}
-}
-
-$newTag = "v$major.$minor.$patch"
-Write-Host "Creating and pushing tag $newTag..."
-
-git tag $newTag
-git push
-git push origin $newTag
-
-Write-Host "Committed and tagged as $newTag."
