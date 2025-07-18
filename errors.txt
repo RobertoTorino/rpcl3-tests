@@ -1,0 +1,1 @@
+$extraAssets    = @("README.txt", "pc.ini", "LICENSE", $versionTxt, $versionDat)

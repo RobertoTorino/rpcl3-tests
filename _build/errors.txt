@@ -1,4 +1,0 @@
-Write-Error: :: Build failed — output file not found.
-Successfully compiled as:
-"D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe"
-Error: Process completed with exit code 1.
