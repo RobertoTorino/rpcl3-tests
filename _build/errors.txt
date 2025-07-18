@@ -1,10 +1,4 @@
-$choice = Read-Host "Which part would you like to increment? (1=major, 2=minor, 3=patch, default=patch):"
-switch ($choice.ToLower()) {
-    "major" { $major++; $minor=0; $patch=0 }
-    "1"     { $major++; $minor=0; $patch=0 }
-    "minor" { $minor++; $patch=0 }
-    "2"     { $minor++; $patch=0 }
-    "patch" { $patch++ }
-    "3"     { $patch++ }
-    default { $patch++ }
-}
+Write-Error: :: Build failed — output file not found.
+Successfully compiled as:
+"D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe"
+Error: Process completed with exit code 1.
