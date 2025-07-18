@@ -1,10 +1,7 @@
-:: Moved EXE to D:\a\rpcl3pc.exe
-:: Build succeeded —  created.
-upx: D:\a\rpcl3-process-control\rpcl3-process-control\: FileNotFoundException: D:\a\rpcl3-process-control\rpcl3-process-control\: No such file or directory
-                       Ultimate Packer for eXecutables
-                          Copyright (C) 1996 - 2025
-UPX 5.0.1       Markus Oberhumer, Laszlo Molnar & John Reiser    May 6th 2025
-        File size         Ratio      Format      Name
-   --------------------   ------   -----------   -----------
-Packed 0 files.
+:: Found: ahk\Compiler\Ahk2Exe.exe
+:: Found: ahk\Compiler\Unicode 32-bit.bin
+:: Found: rpcl3pc.ahk
+Write-Error: :: Build failed — output exe still not found at D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe
+Successfully compiled as:
+"D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe"
 Error: Process completed with exit code 1.
