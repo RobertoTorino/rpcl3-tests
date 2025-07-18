@@ -1,16 +1,10 @@
-Run $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
-  $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
-  $env:upxPath = "$PWD\upx\upx.exe"
-  pwsh build.ps1
-  shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
-Compiling AHK...
-_ Current directory: D:\a\rpcl3-process-control\rpcl3-process-control
-Path verification:
-- Script: rpcl3pc.ahk (exists: True)
-- Ahk2Exe: D:\a\rpcl3-process-control\rpcl3-process-control\ahk\Compiler\Ahk2Exe.exe (exists: True)
-- Icon: rpcl3_media\rpcl3.ico (exists: True)
-- UPX: D:\a\rpcl3-process-control\rpcl3-process-control\upx\upx.exe (exists: True)
-- Output will be: rpcl3pc.exe
-Full command:
-"D:\a\rpcl3-process-control\rpcl3-process-control\ahk\Compiler\Ahk2Exe.exe" /in rpcl3pc.ahk /out rpcl3pc.exe /icon rpcl3_media\rpcl3.ico
-_ Executing...
+$choice = Read-Host "Which part would you like to increment? (1=major, 2=minor, 3=patch, default=patch):"
+switch ($choice.ToLower()) {
+    "major" { $major++; $minor=0; $patch=0 }
+    "1"     { $major++; $minor=0; $patch=0 }
+    "minor" { $minor++; $patch=0 }
+    "2"     { $minor++; $patch=0 }
+    "patch" { $patch++ }
+    "3"     { $patch++ }
+    default { $patch++ }
+}
