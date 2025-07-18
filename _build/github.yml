@@ -3,7 +3,7 @@ name: CI Build and Release
 on:
   push:
     tags:
-      - 'v*'    # Will run on git tag push like v1.2.3
+      - 'v*'
 
 jobs:
   build:
@@ -14,19 +14,13 @@ jobs:
 
       - name: Download AutoHotkey v1 Portable
         run: |
-          Invoke-WebRequest -Uri "https://www.autohotkey.com/download/ahk-v1.zip" -OutFile "ahk-v1.zip"
+          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v1.1.33.11/AutoHotkey_1.1.33.11.zip" -OutFile "ahk-v1.zip"
           Expand-Archive -Path "ahk-v1.zip" -DestinationPath "ahk"
 
       - name: Download UPX
         run: |
           Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v5.0.1/upx-5.0.1-win64.zip" -OutFile "upx.zip"
           Expand-Archive -Path "upx.zip" -DestinationPath "upx"
-
-      - name: Add tools to PATH
-        shell: pwsh
-        run: |
-          echo "$PWD\ahk\Compiler" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "$PWD\upx" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Show tools and PowerShell version
         run: |
@@ -39,11 +33,14 @@ jobs:
         run: |
           $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
           $env:upxPath = "$PWD\upx\upx.exe"
-          pwsh _build/build.ps1
+          pwsh build.ps1
+
+      - name: List final artifacts
+        run: dir
 
       - name: Upload EXE to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: _build/*.exe
+          files: "*.exe"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
