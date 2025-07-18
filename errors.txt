@@ -1,13 +1,1 @@
-if (!(Test-Path $output)) {
-  # Try the absolute path based on build logs (as a fallback)
-  $actualOutput = "D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe"
-  if (Test-Path $actualOutput) {
-    Write-Host ":: Output not where we expected, but found at $actualOutput."
-    Copy-Item $actualOutput $output -Force
-  }
-}
-
-if (!(Test-Path $output)) {
-  Write-Error ":: Build failed — output exe still not found."
-  exit 1
-}
+"D:\a\rpcl3-process-control\rpcl3-process-control\ahk\rpcl3pc.exe"
