@@ -1,7 +1,7 @@
-if (!$ahk2exePath -or !(Test-Path $ahk2exePath)) {
-    Write-Error "Can't find Ahk2Exe at $ahk2exePath"
-    Exit 1
-}
-if (!$upxPath -or !(Test-Path $upxPath)) {
-    Write-Warning "UPX not found at $upxPath — skipping compression."
-}
+Run $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
+  $env:ahk2exePath = "$PWD\ahk\Compiler\Ahk2Exe.exe"
+  $env:upxPath = "$PWD\upx\upx.exe"
+  pwsh build.ps1
+  shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+Write-Error: Can't find Ahk2Exe at 
+Error: Process completed with exit code 1.
