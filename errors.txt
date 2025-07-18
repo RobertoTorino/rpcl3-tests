@@ -1,1 +1,23 @@
-"D:\a\rpcl3-process-control\rpcl3-process-control\ahk\rpcl3pc.exe"
+How to use:
+
+Place this right after your Ahk2Exe call (and after UPX if you want to move the compressed version).
+Now your artifact upload step (e.g., files: rpcl3pc.exe) will see the EXE at the repo root.
+Example (YAML snippet with inline PowerShell):
+
+yaml
+- name: Move EXE to repo root
+  shell: pwsh
+  run: |
+    $pwdNow = $PWD
+    $repoRoot = Resolve-Path "$PWD\..\.."
+    $compiledExe = Join-Path $pwdNow "rpcl3pc.exe"
+    $finalExe    = Join-Path $repoRoot "rpcl3pc.exe"
+
+    if (Test-Path $compiledExe) {
+      Move-Item $compiledExe $finalExe -Force
+      Write-Host ":: Moved EXE to $finalExe"
+    } else {
+      Write-Error "Could not find built EXE at $compiledExe"
+      exit 1
+    }
+You can also use this logic inside your primary build step at the end, if you wish.
