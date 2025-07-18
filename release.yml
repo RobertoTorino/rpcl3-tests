@@ -64,6 +64,23 @@ jobs:
             & $ahkCompiler /in $input /out $output /icon $icon /base $baseFile
           }
 
+      - name: Move EXE to repo root
+        shell: pwsh
+        run: |
+          $pwdNow = $PWD
+          $repoRoot = Resolve-Path "$PWD\..\.."
+          $compiledExe = Join-Path $pwdNow "rpcl3pc.exe"
+          $finalExe    = Join-Path $repoRoot "rpcl3pc.exe"
+
+          if (Test-Path $compiledExe) {
+            Move-Item $compiledExe $finalExe -Force
+            Write-Host ":: Moved EXE to $finalExe"
+          } else {
+            Write-Error "Could not find built EXE at $compiledExe"
+            exit 1
+          }
+          Write-Host ":: Build succeeded — $output created."
+
           # If EXE was placed elsewhere (deep path), move it to repo root
           $repoRoot = $env:GITHUB_WORKSPACE
           $currentExe = Join-Path $PWD $output
@@ -76,7 +93,7 @@ jobs:
             Write-Host ":: Copied EXE to $finalExe"
           }
           if (!(Test-Path $finalExe)) {
-            Write-Error ":: Build failed — output exe still not found at $finalExe"
+            Write-Error ":: Build failed — output exe not found at $finalExe"
             exit 1
           }
 
