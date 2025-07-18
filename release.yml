@@ -8,6 +8,10 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
+      packages: write
+
 
     steps:
       - name: Checkout Repository
@@ -55,59 +59,48 @@ jobs:
             Write-Host ":: Found: $file"
           }
 
-          # --- Compile: capture stdout and stderr for diagnostic ---
-          $stdout = "$PWD\ahk2exe_stdout.txt"
-          $stderr = "$PWD\ahk2exe_stderr.txt"
-          if (Test-Path $stdout) { Remove-Item $stdout }
-          if (Test-Path $stderr) { Remove-Item $stderr }
+          # --- Compile ---
+          & $ahkCompiler /in $input /out $output /icon $icon /base $baseFile
 
-          Write-Host ":: Running Ahk2Exe with icon..."
-          $proc = Start-Process -FilePath $ahkCompiler -ArgumentList "/in", $input, "/out", $output, "/icon", $icon, "/base", $baseFile `
-            -NoNewWindow -Wait -PassThru `
-            -RedirectStandardOutput $stdout `
-            -RedirectStandardError $stderr
-
-          Write-Host ":: Ahk2Exe ExitCode: $($proc.ExitCode)"
-          Write-Host "===== Ahk2Exe stdout ====="
-          if (Test-Path $stdout) { Get-Content $stdout }
-          Write-Host "===== Ahk2Exe stderr ====="
-          if (Test-Path $stderr) { Get-Content $stderr }
-
+          # --- Always move EXE to $env:GITHUB_WORKSPACE ---
           $repoRoot = $env:GITHUB_WORKSPACE
           $compiledExe = Join-Path $PWD $output
           $finalExe    = Join-Path $repoRoot $output
 
-          # Try moving/copying compiled EXE to $GITHUB_WORKSPACE
+          # Diagnostic: show where files are
+          Write-Host "== DIR \$PWD =="
+          Get-ChildItem $PWD
+          Write-Host "== DIR \$repoRoot =="
+          Get-ChildItem $repoRoot
+
+          # Normal move/copy logic
           if ((Test-Path $compiledExe) -and ($compiledExe -ne $finalExe)) {
             Move-Item $compiledExe $finalExe -Force
             Write-Host ":: Moved EXE to $finalExe"
           }
 
-          # If EXE is still missing at this stage, try compiling without icon as a diagnostic
+          # Deep magic: if not found, check hardcoded place and copy
           if (!(Test-Path $finalExe)) {
-            Write-Host ":: EXE missing, retrying Ahk2Exe WITHOUT icon..."
-            $proc2 = Start-Process -FilePath $ahkCompiler -ArgumentList "/in", $input, "/out", $output, "/base", $baseFile `
-              -NoNewWindow -Wait -PassThru `
-              -RedirectStandardOutput $stdout `
-              -RedirectStandardError $stderr
-            if ((Test-Path $compiledExe) -and ($compiledExe -ne $finalExe)) {
-              Move-Item $compiledExe $finalExe -Force
-              Write-Host ":: Moved EXE to $finalExe after icon-less build"
+            $knownGood = "D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe"
+            if (Test-Path $knownGood) {
+              Write-Host ":: Found EXE at $knownGood after all! Copying to $finalExe"
+              Copy-Item $knownGood $finalExe -Force
             }
-            # Print logs again
-            Write-Host ":: Second try Ahk2Exe ExitCode: $($proc2.ExitCode)"
-            Write-Host "===== Ahk2Exe stdout (iconless) ====="
-            if (Test-Path $stdout) { Get-Content $stdout }
-            Write-Host "===== Ahk2Exe stderr (iconless) ====="
-            if (Test-Path $stderr) { Get-Content $stderr }
           }
 
-          # Final diagnostics if still missing
+          # Print diagnostics
+          Write-Host "== Testing paths =="
+          Write-Host "Test-Path finalExe: $finalExe => $(Test-Path $finalExe)"
+          Write-Host "Test-Path lower: $($finalExe.ToLower()) => $(Test-Path ($finalExe.ToLower()))"
+          Write-Host "Test-Path hardcoded: D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe => $(Test-Path 'D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe')"
+          Write-Host "Char-by-char finalExe:"
+          $finalExe.ToCharArray() | ForEach-Object { "{0} [{1:X2}]" -f $_, [int][char]$_  }
+          Write-Host "== DIR of finalExe =="
+          Get-ChildItem -Path (Split-Path $finalExe)
+
+          Write-Host "Looking for output at: $finalExe"
+          Start-Sleep -Seconds 2 # optional, for timing issues
           if (!(Test-Path $finalExe)) {
-            Write-Host "== DIR \$PWD =="
-            Get-ChildItem $PWD -Recurse
-            Write-Host "== DIR \$repoRoot =="
-            Get-ChildItem $repoRoot
             Write-Error ":: Build failed — output exe still not found at $finalExe"
             exit 1
           }
