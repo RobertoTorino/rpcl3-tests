@@ -66,6 +66,19 @@ jobs:
             Move-Item $compiledExe $finalExe -Force
             Write-Host ":: Moved EXE to $finalExe"
           }
+          
+          $test = $finalExe
+          Write-Host "Test-Path on: $test"
+          if (!(Test-Path $test)) {
+            # Try lowercase
+            $test2 = $test.ToLower()
+            Write-Host "Test-Path lower: $test2 : $(Test-Path $test2)"
+            # Try direct literal
+            Write-Host "Test-Path on literal: D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe : $(Test-Path 'D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe')"
+            # List the folder
+            dir (Split-Path $test)
+          }
+          
           if (!(Test-Path $finalExe)) {
             Write-Error ":: Build failed — output exe still not found at $finalExe"
             exit 1
