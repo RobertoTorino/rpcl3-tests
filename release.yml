@@ -19,24 +19,6 @@ jobs:
           $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host "Using PowerShell version: $($PSVersionTable.PSVersion)"
 
-#      - name: Download AutoHotkey v1 Portable
-#        run: |
-#          Invoke-WebRequest -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v1.1.37.02/AutoHotkey_1.1.37.02.zip" -OutFile "ahk-v1.zip"
-#          Expand-Archive -Path "ahk-v1.zip" -DestinationPath "ahk"
-#          dir ahk
-#
-#      - name: Download UPX
-#        run: |
-#          Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v5.0.1/upx-5.0.1-win64.zip" -OutFile "upx.zip"
-#          Expand-Archive -Path "upx.zip" -DestinationPath "upx"
-#          dir upx
-#
-#      - name: Debug - List files
-#        run: |
-#          dir
-#          dir ahk
-#          dir ahk\Compiler
-
       - name: Debug - List files
         run: |
           dir
@@ -44,10 +26,11 @@ jobs:
           dir ahk\Compiler
           dir upx
 
-      - name: Build EXE and ZIP with inline PowerShell
+      - name: Build EXE, move to root, and create ZIP
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+
           $ahkCompiler = "ahk\Compiler\Ahk2Exe.exe"
           $baseFile    = "ahk\Compiler\Unicode 32-bit.bin"
           $input       = "rpcl3pc.ahk"
@@ -74,63 +57,50 @@ jobs:
           }
 
           # Compile
-            if (!(Test-Path $icon)) {
-              Write-Warning "Icon file not found — continuing without icon"
-              & $ahkCompiler /in $input /out $output /base $baseFile
+          if (!(Test-Path $icon)) {
+            Write-Warning "Icon file not found — continuing without icon"
+            & $ahkCompiler /in $input /out $output /base $baseFile
           } else {
-              & $ahkCompiler /in $input /out $output /icon $icon /base $baseFile
+            & $ahkCompiler /in $input /out $output /icon $icon /base $baseFile
           }
 
-            if (!(Test-Path $output)) {
-            # Try the absolute path based on build logs (as a fallback)
-              $actualOutput = "D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe"
-            if (Test-Path $actualOutput) {
-              Write-Host ":: Output not where we expected, but found at $actualOutput."
-              Copy-Item $actualOutput $output -Force
-            }
-          }
-
-          if (!(Test-Path $output)) {
-          Write-Error ":: Build failed — output exe still not found."
-          exit 1
-          }
-
-      - name: Move EXE to repo root
-        shell: pwsh
-        run: |
-          $pwdNow = $PWD
-          $repoRoot = Resolve-Path "$PWD\..\.."
-          $compiledExe = Join-Path $pwdNow "rpcl3pc.exe"
-          $finalExe    = Join-Path $repoRoot "rpcl3pc.exe"
-
-          if (Test-Path $compiledExe) {
-            Move-Item $compiledExe $finalExe -Force
+          # If EXE was placed elsewhere (deep path), move it to repo root
+          $repoRoot = $env:GITHUB_WORKSPACE
+          $currentExe = Join-Path $PWD $output
+          $finalExe = Join-Path $repoRoot $output
+          if ((Test-Path $currentExe) -and ($currentExe -ne $finalExe)) {
+            Move-Item $currentExe $finalExe -Force
             Write-Host ":: Moved EXE to $finalExe"
-          } else {
-            Write-Error "Could not find built EXE at $compiledExe"
+          } elseif (!(Test-Path $finalExe) -and (Test-Path $currentExe)) {
+            Copy-Item $currentExe $finalExe -Force
+            Write-Host ":: Copied EXE to $finalExe"
+          }
+          if (!(Test-Path $finalExe)) {
+            Write-Error ":: Build failed — output exe still not found at $finalExe"
             exit 1
           }
-          Write-Host ":: Build succeeded — $output created."
-          
 
-          Write-Host ":: Compressing with UPX..."
-          & "upx\upx.exe" --best --lzma $output
-
-           Collect all existing assets for the zip
-          $toZip = @($output)
-          foreach ($asset in $extraAssets) {
-            if (Test-Path $asset) {
-              $toZip += $asset
-              Write-Host ":: Added to zip: $asset"
-            } else {
-              Write-Warning "Not adding (missing): $asset"
-            }
+          # Compress with UPX (optional; comment out if broken)
+          if (Test-Path "upx\upx.exe") {
+            & "upx\upx.exe" --best --lzma $finalExe
           }
 
-          Compress-Archive -Path $toZip -DestinationPath $zipName
+          # Collect all existing assets for the zip, with roots in the workspace
+          $toZip = @($finalExe)
+          foreach ($asset in $extraAssets) {
+            $assetAbs = Join-Path $repoRoot $asset
+            if (Test-Path $assetAbs) {
+              $toZip += $assetAbs
+              Write-Host ":: Added to zip: $assetAbs"
+            } else {
+              Write-Warning "Not adding (missing): $assetAbs"
+            }
+          }
+          $zipPath = Join-Path $repoRoot $zipName
+          Compress-Archive -Path $toZip -DestinationPath $zipPath -Force
 
       - name: List final artifacts
-        run: dir
+        run: dir ${{ github.workspace }}
 
       - name: Upload EXE and ZIP to GitHub Release
         uses: softprops/action-gh-release@v2
