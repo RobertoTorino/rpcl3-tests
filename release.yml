@@ -26,7 +26,7 @@ jobs:
           dir ahk\Compiler
           dir upx
 
-      - name: Build EXE, move to root, and create ZIP
+      - name: Build EXE, move to root, UPX and create ZIP
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -51,58 +51,32 @@ jobs:
             if (!(Test-Path $file)) {
               Write-Error "Required file not found: $file"
               exit 1
-            } else {
-              Write-Host ":: Found: $file"
             }
+            Write-Host ":: Found: $file"
           }
 
-          # Compile
-          if (!(Test-Path $icon)) {
-            Write-Warning "Icon file not found — continuing without icon"
-            & $ahkCompiler /in $input /out $output /base $baseFile
-          } else {
-            & $ahkCompiler /in $input /out $output /icon $icon /base $baseFile
-          }
+          # --- Compile ---
+          & $ahkCompiler /in $input /out $output /icon $icon /base $baseFile
 
-      - name: Move EXE to repo root
-        shell: pwsh
-        run: |
-          $pwdNow = $PWD
-          $repoRoot = Resolve-Path "$PWD\..\.."
-          $compiledExe = Join-Path $pwdNow "rpcl3pc.exe"
-          $finalExe    = Join-Path $repoRoot "rpcl3pc.exe"
-
-          if (Test-Path $compiledExe) {
+          # --- Always move EXE to $env:GITHUB_WORKSPACE ---
+          $repoRoot = $env:GITHUB_WORKSPACE
+          $compiledExe = Join-Path $PWD $output
+          $finalExe    = Join-Path $repoRoot $output
+          if ((Test-Path $compiledExe) -and ($compiledExe -ne $finalExe)) {
             Move-Item $compiledExe $finalExe -Force
             Write-Host ":: Moved EXE to $finalExe"
-          } else {
-            Write-Error "Could not find built EXE at $compiledExe"
-            exit 1
-          }
-          Write-Host ":: Build succeeded — $output created."
-
-          # If EXE was placed elsewhere (deep path), move it to repo root
-          $repoRoot = $env:GITHUB_WORKSPACE
-          $currentExe = Join-Path $PWD $output
-          $finalExe = Join-Path $repoRoot $output
-          if ((Test-Path $currentExe) -and ($currentExe -ne $finalExe)) {
-            Move-Item $currentExe $finalExe -Force
-            Write-Host ":: Moved EXE to $finalExe"
-          } elseif (!(Test-Path $finalExe) -and (Test-Path $currentExe)) {
-            Copy-Item $currentExe $finalExe -Force
-            Write-Host ":: Copied EXE to $finalExe"
           }
           if (!(Test-Path $finalExe)) {
-            Write-Error ":: Build failed — output exe not found at $finalExe"
+            Write-Error ":: Build failed — output exe still not found at $finalExe"
             exit 1
           }
 
-          # Compress with UPX (optional; comment out if broken)
+          # --- UPX ---
           if (Test-Path "upx\upx.exe") {
             & "upx\upx.exe" --best --lzma $finalExe
           }
 
-          # Collect all existing assets for the zip, with roots in the workspace
+          # --- ZIP ---
           $toZip = @($finalExe)
           foreach ($asset in $extraAssets) {
             $assetAbs = Join-Path $repoRoot $asset
