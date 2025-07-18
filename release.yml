@@ -62,23 +62,38 @@ jobs:
           $repoRoot = $env:GITHUB_WORKSPACE
           $compiledExe = Join-Path $PWD $output
           $finalExe    = Join-Path $repoRoot $output
+
+          # Diagnostic: show where files are
+          Write-Host "== DIR \$PWD =="
+          Get-ChildItem $PWD
+          Write-Host "== DIR \$repoRoot =="
+          Get-ChildItem $repoRoot
+
+          # Normal move/copy logic
           if ((Test-Path $compiledExe) -and ($compiledExe -ne $finalExe)) {
             Move-Item $compiledExe $finalExe -Force
             Write-Host ":: Moved EXE to $finalExe"
           }
-          
-          $test = $finalExe
-          Write-Host "Test-Path on: $test"
-          if (!(Test-Path $test)) {
-            # Try lowercase
-            $test2 = $test.ToLower()
-            Write-Host "Test-Path lower: $test2 : $(Test-Path $test2)"
-            # Try direct literal
-            Write-Host "Test-Path on literal: D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe : $(Test-Path 'D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe')"
-            # List the folder
-            dir (Split-Path $test)
+
+          # Deep magic: if not found, check hardcoded place and copy
+          if (!(Test-Path $finalExe)) {
+            $knownGood = "D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe"
+            if (Test-Path $knownGood) {
+              Write-Host ":: Found EXE at $knownGood after all! Copying to $finalExe"
+              Copy-Item $knownGood $finalExe -Force
+            }
           }
-          
+
+          # Print diagnostics
+          Write-Host "== Testing paths =="
+          Write-Host "Test-Path finalExe: $finalExe => $(Test-Path $finalExe)"
+          Write-Host "Test-Path lower: $($finalExe.ToLower()) => $(Test-Path ($finalExe.ToLower()))"
+          Write-Host "Test-Path hardcoded: D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe => $(Test-Path 'D:\a\rpcl3-process-control\rpcl3-process-control\rpcl3pc.exe')"
+          Write-Host "Char-by-char finalExe:"
+          $finalExe.ToCharArray() | ForEach-Object { "{0} [{1:X2}]" -f $_, [int][char]$_  }
+          Write-Host "== DIR of finalExe =="
+          Get-ChildItem -Path (Split-Path $finalExe)
+
           if (!(Test-Path $finalExe)) {
             Write-Error ":: Build failed — output exe still not found at $finalExe"
             exit 1
