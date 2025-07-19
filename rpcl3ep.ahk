@@ -133,7 +133,6 @@ MsgBox, 64, About RPCL3PC, %aboutText%
 ; ─── Show GUI. ────────────────────────────────────────────────────────────────────────────────────────────────────────
 ShowGui:
     Gui, Show
-    SB_SetText("RPCS3 Process Control GUI Shown.", 2)
 return
 
 GuiClose:
