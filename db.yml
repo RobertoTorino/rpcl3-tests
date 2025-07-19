@@ -1,0 +1,17 @@
+name: Release games.db
+
+on:
+  push:
+    tags:
+      - 'v*'     # Triggers on version tags like v1.0.0
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload games.db as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: games.db
